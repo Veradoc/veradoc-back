@@ -117,6 +117,8 @@ async def chat_endpoint(
                 "options": {
                     "temperature": 0,
                     "top_p": 0.90,
+                    'num_ctx': 2048,    # reduce memory footprint
+                    'num_thread': 4,    # limit CPU threads                    
                 }
             },
             stream=True
@@ -129,9 +131,10 @@ async def chat_endpoint(
 
                 if resp:
                     json_data = json.loads(resp)
+                    
                     print(json_data)
-                    content = json_data["message"]["content"]
 
+                    content = json_data["message"]["content"]
                     full_ai_response += content
 
                     # Send text chunks
