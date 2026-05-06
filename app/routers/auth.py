@@ -130,6 +130,14 @@ router.include_router(
     tags=["auth"],
 )
 
+@router.post("/auth/register-admin", tags=["auth"])
+async def admin_register(
+    user_create: UserCreate,
+    user_manager: UserManager = Depends(get_user_manager),
+    _: User = Depends(current_active_superuser),
+):
+    return await user_manager.create(user_create, safe=False)
+
 @router.get("/users/by-email/{email}", response_model=UserRead)
 async def get_user_by_email(
     email: str,

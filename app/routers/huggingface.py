@@ -79,7 +79,8 @@ async def list_huggingface_models(
 
         models = hf_api.list_models(
             search=search, # search text inside model name
-            apps="ollama", # compatible with Ollama Model Manager
+            apps="ollama", # compatible models with Ollama
+            filter="gguf", # compatible format with Ollama
             pipeline_tag=filter, # filter only multimodal to text models: feature-extraction
             sort=sort, # sort by downloads, likes or creation date
             limit=limit # pagination limit                  

@@ -1,10 +1,16 @@
 
+import uuid
+
 from fastapi.responses import StreamingResponse
 from fastapi import APIRouter, Depends, HTTPException
 from ollama import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 
 from app.config import settings
-from app.routers.auth import current_active_superuser, current_active_user
+from app.routers.auth import current_active_superuser, current_active_user, get_async_session
+from app.models.model import Model
 
 router = APIRouter(
     prefix="/api/v1",
@@ -13,6 +19,35 @@ router = APIRouter(
 
 # Initialize Ollama client
 client = AsyncClient(host=settings.ollama_host)
+
+async def model_mapper(
+        session: AsyncSession,
+        huggingface_name: str, 
+        pipeline_tag: str, 
+        ollama_name: str):
+    # 1. Lookup the tag in your local DB
+    stmt = select(Model).where(
+        Model.huggingface_name == huggingface_name, pipeline_tag == pipeline_tag
+    )    
+        
+    result = await session.execute(stmt)
+    
+    model = result.scalars().first()
+
+    # 2. Create huggingface ollama map
+    if not model:
+        model = Model(
+            id=str(uuid.uuid4()),
+            huggingface_name=huggingface_name, 
+            ollama_name=ollama_name, 
+            pipeline_tag=pipeline_tag            
+        )
+
+        session.add(model)
+
+        await session.commit() 
+
+    return model   
 
 @router.get(
     "/models/ollama",
@@ -86,15 +121,18 @@ async def delete_ollama_model(model_name: str):
         # Catch SDK errors or connection issues
         raise HTTPException(status_code=500, detail=f"Ollama SDK Error: {str(e)}")
     
-@router.post("/models/ollama/pull/{model_name:path}",
+@router.post("/models/ollama/pull/{model_name:path}/{pipeline_tag}",
     summary="Pull Ollama Model",
     description="""
     Initiates the pulling (or downloading) of a specific model into the Ollama engine. 
     This is a **streaming endpoint** that provides real-time progress logs.
     """,
     response_description="A text stream of the CLI execution logs.",    
-    dependencies=[Depends(current_active_superuser)]             )
-async def pull_model(model_name: str):
+    dependencies=[Depends(current_active_superuser)])
+async def pull_model(
+    model_name: str,
+    pipeline_tag: str,
+    session: AsyncSession = Depends(get_async_session),):
     """
     Pull a model. 
     Uses StreamingResponse to provide real-time logs.
@@ -114,6 +152,23 @@ async def pull_model(model_name: str):
                     progress = f" ({p:.2f}%)"
                 
                 yield f"{status}{progress}\n"
+
+            # --- THE LOOP HAS FINISHED HERE ---
+            yield "Pull complete. Registering and activating model...\n"
+
+            # 2. Get the actual local name from Ollama
+            local_models = await client.list()
+            # We look for a model that contains our model_name 
+            # (Ollama often keeps the 'hf.co/' prefix in the local name)
+            registered_name = next(
+                (m['model'] for m in local_models['models'] if model_name in m['model']), 
+                f"hf.co/{model_name}" # Fallback to the expected name
+            )
+
+            # 3. Map huggingface to ollama model
+            await model_mapper(session, model_name, pipeline_tag, registered_name)
+
+            yield f"Model registered as: {registered_name}\n"
         except Exception as e:
             yield f"\nError: {str(e)}"
 
