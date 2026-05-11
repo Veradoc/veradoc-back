@@ -7,9 +7,13 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # 3. Install system dependencies (including Tesseract as requested earlier)
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0t64 \
+    libmagic1t64 \
     tesseract-ocr \
     tesseract-ocr-spa \
+    && apt-get clean \    
     && rm -rf /var/lib/apt/lists/*
 
 # 4. Set the working directory in the container
