@@ -26,7 +26,6 @@ except Exception as e:
     """,
     response_description="A text stream of the CLI execution logs.",    
     dependencies=[Depends(current_active_superuser)])
-@router.get("/containers")
 async def list_containers(stack_name: str = None, all: bool = True):
     """
     List containers, optionally filtered by Docker Compose stack name.
@@ -53,7 +52,6 @@ async def list_containers(stack_name: str = None, all: bool = True):
             })
             
         return {"stack": stack_name or "all", "containers": container_data}
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -69,6 +67,7 @@ async def start_container(container_id: str):
     try:
         container = client.containers.get(container_id)
         container.start()
+
         return {"message": f"Container {container_id} started successfully"}
     except docker.errors.NotFound:
         raise HTTPException(status_code=404, detail="Container not found")
@@ -80,12 +79,13 @@ async def start_container(container_id: str):
     description="""
     Docker Containers stoped into the Docker engine.
     """,             
-    dependencies=[Depends(current_active_superuser)]             )
+    dependencies=[Depends(current_active_superuser)])
 async def stop_container(container_id: str):
     """Stop a specific container by ID or Name."""
     try:
         container = client.containers.get(container_id)
         container.stop()
+
         return {"message": f"Container {container_id} stopped successfully"}
     except docker.errors.NotFound:
         raise HTTPException(status_code=404, detail="Container not found")
