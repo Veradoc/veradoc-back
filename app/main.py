@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from app.routers.auth import lifespan_auth
 from app.routers.llm import lifespan_llm
-from app.routers import auth, collection, file, chat, llm, ollama, huggingface
+from app.routers import auth, collection, file, chat, llm, ollama, huggingface, docker
 
 def conf_openapi():
     if app.openapi_schema:
@@ -88,6 +88,7 @@ app.include_router(chat.router)
 app.include_router(llm.router)
 app.include_router(ollama.router)
 app.include_router(huggingface.router)
+app.include_router(docker.router)
 
 @app.get("/health", tags=["system"], summary="Health Check")
 async def health_check():
