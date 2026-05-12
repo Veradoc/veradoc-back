@@ -41,6 +41,14 @@ async def list_containers(stack_name: str = None, all: bool = True):
         
         container_data = []
         for c in containers:
+            # Reusing the logic above
+            networks = c.attrs['NetworkSettings']['Networks']
+            ip = next(iter(networks.values()))['IPAddress'] if networks else "N/A"
+
+            ports = c.attrs['NetworkSettings']['Ports']
+            # Create a list like ["1883:1883", "9001:9001"]
+            p_list = [f"{m[0]['HostPort']}->{p.split('/')[0]}" for p, m in ports.items() if m]
+
             container_data.append({
                 "id": c.short_id,
                 "name": c.name,
@@ -48,6 +56,8 @@ async def list_containers(stack_name: str = None, all: bool = True):
                 "image": c.image.tags[0] if c.image.tags else "untagged",
                 "health": c.health,
                 "attrs": c.attrs,
+                "ip": ip or "N/A",
+                "ports": ", ".join(p_list) if p_list else "-",
                 "status": c.status
             })
             
