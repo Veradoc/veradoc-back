@@ -63,11 +63,11 @@ async def list_containers(stack_name: str = None, all: bool = True):
     """
     try:
         filters = {}
-        #if stack_name:
+        if stack_name:
             # Docker Compose automatically labels containers with the project name
-        #    filters = {'label': f"com.docker.compose.project={stack_name}"}
-        
-        filters = {'label': f"com.docker.compose.project={DEF_STACK}"}
+            filters = {'label': f"com.docker.compose.project={stack_name}"}
+        else:
+            filters = {'label': f"com.docker.compose.project={DEF_STACK}"}
 
         # We pass the filters dictionary to the list method
         containers = client.containers.list(all=all, filters=filters)
