@@ -1,3 +1,4 @@
+import platform
 import docker
 from fastapi import APIRouter, HTTPException, Depends
 from app.routers.auth import current_active_superuser
@@ -12,10 +13,40 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+DEF_STACK="veradoc-web"
+
+def get_docker_client():
+    """
+    Returns a Docker client configured for the current Operating System.
+    """
+    system = platform.system()
+    
+    try:
+        if system == "Windows":
+            # Windows uses Named Pipes for Docker Desktop
+            return docker.DockerClient(base_url='npipe:////./pipe/docker_engine')
+        
+        elif system == "Darwin":  # macOS
+            # Check for the specific Mac user-level socket found in Solution 2
+            mac_socket = f"unix://{os.path.expanduser('~')}/.docker/run/docker.sock"
+            if os.path.exists(mac_socket.replace('unix://', '')):
+                return docker.DockerClient(base_url=mac_socket)
+            # Fallback to default
+            return docker.from_env()
+            
+        else:
+            # Linux and others (default behavior)
+            return docker.from_env()
+            
+    except Exception as e:
+        print(f"Error connect∫∫ing to Docker on {system}: {e}")
+        raise e
+    
 # Initialize the Docker client
 # This connects to the local Docker daemon via the default socket
 try:
-    client = docker.from_env()
+    # cross-platform docker client
+    client = get_docker_client()  
 except Exception as e:
     print(f"Error connecting to Docker: {e}")
 
@@ -32,10 +63,12 @@ async def list_containers(stack_name: str = None, all: bool = True):
     """
     try:
         filters = {}
-        if stack_name:
+        #if stack_name:
             # Docker Compose automatically labels containers with the project name
-            filters = {'label': f"com.docker.compose.project={stack_name}"}
+        #    filters = {'label': f"com.docker.compose.project={stack_name}"}
         
+        filters = {'label': f"com.docker.compose.project={DEF_STACK}"}
+
         # We pass the filters dictionary to the list method
         containers = client.containers.list(all=all, filters=filters)
         
