@@ -7,9 +7,9 @@ from ollama import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 from app.config import settings
 from app.routers.auth import current_active_superuser, current_active_user, get_async_session
+from app.routers.huggingface import get_hf_model_info
 from app.models.model import Model
 
 router = APIRouter(
@@ -209,6 +209,33 @@ async def start_ollama_model(model_name: str):
                 
                 yield f"{status}{progress}\n"
 
+            # After pulling, stop LLM of embedding model (only one LLM)
+            running = await client.ps()
+            
+            for model in running.models:
+                # parse ollama to huggingface model id
+                ollama_model_id = model.model 
+                ollama_model_id_tokens = ollama_model_id.split("/")
+                huggingface_model_id = ollama_model_id_tokens[1] + "/" + ollama_model_id_tokens[2].split(":")[0]
+
+                print(f"Running Model ID: {huggingface_model_id}")
+
+                # check the model info
+                model_info = await get_hf_model_info(huggingface_model_id)
+                
+                # Only stop the LLM model (only one LLM must be running at the same time near the embedded model)
+                if model_info["pipeline_tag"] == "text-generation" or model_info["pipeline_tag"] == "image-text-to-text":
+                    yield f"Initiating unload for: {ollama_model_id}\n"
+                    
+                    # Sending keep_alive=0 (integer) tells Ollama to evict the model immediately
+                    # We don't need a prompt or real generation here
+                    await client.generate(model=ollama_model_id, prompt="", keep_alive=0)
+                    
+                    yield f"Success: {ollama_model_id} has been removed from memory.\n"
+                    yield f"VRAM/RAM resources freed."
+
+                    break                    
+            
             # After pulling, we 'warm' the model (load into VRAM)
             yield f"Loading {model_name} into memory...\n"
             await client.generate(model=model_name, prompt="", keep_alive=-1)

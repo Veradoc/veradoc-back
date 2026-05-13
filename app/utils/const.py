@@ -3,8 +3,9 @@ import os
 from app.config import settings
 
 # LLM configurations
-LLM_MODEL = "phi3:3.8b-mini-128k-instruct-q8_0"
-EMBEDDING_MODEL = "nomic-embed-text:v1.5"
+LLM_MODEL = "hf.co/unsloth/gemma-3-1b-it-GGUF:latest"
+EMBEDDING_MODEL = "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:latest"
+#EMBEDDING_MODEL = "nomic-embed-text:v1.5"
 
 # Google configurations
 GOOGLE_CLIENT_ID = "203872501539-5utooc4ptpso11301ruqllthq17nb3kb.apps.googleusercontent.com"

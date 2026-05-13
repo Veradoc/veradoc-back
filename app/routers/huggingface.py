@@ -130,3 +130,28 @@ async def list_huggingface_models(
         raise HTTPException(status_code=502, detail=f"HuggingFace API error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/model/{model_id:path}")
+async def get_hf_model_info(model_id: str):
+    """
+    Recover detailed metadata for a Hugging Face model.
+    Example model_id: 'facebook/detr-resnet-50' or 'gpt2'
+    """
+    try:
+        # Fetch model data using the SDK
+        info = hf_api.model_info(model_id)
+        
+        return {
+            "model_id": info.modelId,
+            "author": info.author,
+            "last_modified": info.lastModified,
+            "downloads": info.downloads,
+            "likes": info.likes,
+            "tags": info.tags,
+            "pipeline_tag": info.pipeline_tag,
+            "private": info.private,
+            "library_name": info.library_name
+        }
+    except Exception as e:
+        # Handle 404 or connection issues
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found or SDK error: {str(e)}")    
