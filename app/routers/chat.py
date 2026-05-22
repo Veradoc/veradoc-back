@@ -31,6 +31,18 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+def set_active_model(model_name: str):
+    global LLM_MODEL
+
+    LLM_MODEL = model_name
+    print(f"[STATE] In-memory model successfully updated to: {LLM_MODEL}")
+
+def set_top_vectors(top_vectors: str):
+    global TOP_VECTORS
+
+    TOP_VECTORS = int(top_vectors)
+    print(f"[STATE] Top Vectors LLM model configured for: {TOP_VECTORS}")
+
 @router.post("/promt")
 async def chat_endpoint(
     request: Request,
@@ -82,8 +94,8 @@ async def chat_endpoint(
     async def event_generator():
         # 4. chek if the requets must be used knowledge base
         if (active_RAG):
-            # 4. Perform your search (RAG Logic)
-            res = search(user_question)
+            # 4. Perform your search (RAG Logic) passing the top vectors to be recovered
+            res = search(user_question, TOP_VECTORS)
             documents = " ".join([d["text"].strip() for d in res.to_list()])
 
             content = RAG_PROMPT.format(user_question=user_question, documents=documents)

@@ -1,15 +1,19 @@
 
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi.responses import StreamingResponse
-from fastapi import APIRouter, Depends, HTTPException
-from ollama import AsyncClient
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from ollama import AsyncClient
 
+from app.utils.const import LLM_MODEL, TOP_VECTORS
 from app.config import settings
-from app.routers.auth import current_active_superuser, current_active_user, get_async_session
+from app.routers.auth import current_active_superuser, current_active_user, async_session_maker, get_async_session
 from app.routers.huggingface import get_hf_model_info
+from app.routers.chat import set_active_model, set_top_vectors
+from app.routers.setting import SettingUpdatePayload, get_setting_by_key, save_key
 from app.models.model import Model
 
 router = APIRouter(
@@ -17,6 +21,39 @@ router = APIRouter(
     tags=["ollama"],
 )
 
+ACTIVE_LLM_MODEL_KEY = "ACTIVE_MODEL"
+TOP_VECTORS_KEY = "TOP_VECTORS"
+
+@asynccontextmanager
+async def lifespan_ollama(app: FastAPI):    
+    async with async_session_maker() as session:
+        try:
+            # system models configuration
+            llm_model_setting = await get_setting_by_key(ACTIVE_LLM_MODEL_KEY, session)
+            top_vectors_setting = await get_setting_by_key(TOP_VECTORS_KEY, session)            
+
+            if llm_model_setting and llm_model_setting.value:                
+                set_active_model(llm_model_setting.value)
+                print(f"[LIFESPAN] Successfully restored active llm model: {llm_model_setting.value}")
+            else:
+                set_active_model(LLM_MODEL)
+                print("[LIFESPAN] No llm model configuration found. Using default preset.")
+
+            if top_vectors_setting and top_vectors_setting.value:                
+                set_top_vectors(top_vectors_setting.value)
+                print(f"[LIFESPAN] Successfully recovery top vectors: {top_vectors_setting.value}")
+            else:
+                set_top_vectors(TOP_VECTORS)
+                print("[LIFESPAN] No model configuration found. Using default preset.")
+
+        except Exception as e:
+            set_active_model(LLM_MODEL)
+            set_top_vectors(TOP_VECTORS)
+
+            print(f"[LIFESPAN ERROR] Failed to fetch settings from DB, set default model configuratins: {e}")
+
+    yield  # Let control return to the main loop            
+    
 # Initialize Ollama client
 client = AsyncClient(host=settings.ollama_host)
 
@@ -47,7 +84,7 @@ async def model_mapper(
 
         await session.commit() 
 
-    return model   
+    return model
 
 @router.get(
     "/models/ollama",
@@ -84,8 +121,7 @@ async def get_pulled_ollama_models(search: str = None):
 
     return all_models
 
-@router.delete(
-    "/models/ollama/delete/{model_name:path}",
+@router.delete("/models/ollama/delete/{model_name:path}",
     summary="Delete Ollama Model",
     description="Permanently removes the model files from the local Ollama storage.",
     dependencies=[Depends(current_active_superuser)] 
@@ -132,7 +168,7 @@ async def delete_ollama_model(model_name: str):
 async def pull_model(
     model_name: str,
     pipeline_tag: str,
-    session: AsyncSession = Depends(get_async_session),):
+    session: AsyncSession = Depends(get_async_session)):
     """
     Pull a model. 
     Uses StreamingResponse to provide real-time logs.
@@ -183,7 +219,9 @@ async def pull_model(
     """,
     response_description="A text stream of the CLI execution logs.",    
     dependencies=[Depends(current_active_superuser)])
-async def start_ollama_model(model_name: str):
+async def start_ollama_model(
+    model_name: str,
+    session: AsyncSession = Depends(get_async_session)):
     """
     Starts/Pulls a model. 
     Uses StreamingResponse to provide real-time logs.
@@ -240,6 +278,15 @@ async def start_ollama_model(model_name: str):
             yield f"Loading {model_name} into memory...\n"
             await client.generate(model=model_name, prompt="", keep_alive=-1)
             
+            # set running model for next chat
+            set_active_model(model_name)
+
+            # persist running model for next restart
+            await save_key(
+                key=ACTIVE_LLM_MODEL_KEY,
+                payload=SettingUpdatePayload(value=model_name),
+                session=session)
+
             yield f"\nModel {model_name} is ready."
         except Exception as e:
             yield f"\nError: {str(e)}"

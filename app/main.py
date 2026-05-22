@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 
 from app.routers.auth import lifespan_auth
 from app.routers.llm import lifespan_llm
-from app.routers import auth, collection, file, chat, llm, ollama, huggingface, docker
+from app.routers.ollama import lifespan_ollama
+from app.routers import auth, collection, file, chat, llm, ollama, huggingface, docker, setting
 
 def conf_openapi():
     if app.openapi_schema:
@@ -57,7 +58,8 @@ def conf_openapi():
 async def main_lifespan(app: FastAPI):
     async with lifespan_auth(app):
         async with lifespan_llm(app):
-            yield  # The app runs here
+            async with lifespan_ollama(app):
+                yield  # The app runs here
 
 app = FastAPI(lifespan=main_lifespan)
 
@@ -89,6 +91,7 @@ app.include_router(llm.router)
 app.include_router(ollama.router)
 app.include_router(huggingface.router)
 app.include_router(docker.router)
+app.include_router(setting.router)
 
 @app.get("/health", tags=["system"], summary="Health Check")
 async def health_check():

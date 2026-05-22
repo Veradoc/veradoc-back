@@ -17,9 +17,6 @@ class DocsModel(LanceModel):
     text: str
     vector: Vector(EMBEDDINGS_DIM, pa.float16()) # type: ignore
 
-#db = lancedb.connect("s3://warehouse/v-db/",
-#                     read_consistency_interval=timedelta(seconds=5))
-
 def get_db():
     global db
 
@@ -44,8 +41,10 @@ def get_or_create_table():
 
 def get_embedding(text):
     resp = requests.post(settings.ollama_host + "/api/embeddings",
-                         json={"model": EMBEDDING_MODEL,
-                               "prompt": text})
+                         json={"model": EMBEDDING_MODEL, "prompt": text})
+
+    # Log the real dimension once to make sure your config is correct
+    #print(f"Model {EMBEDDING_MODEL} returned {len(resp.json()["embedding"])} dims")
 
     return np.array(resp.json()["embedding"][:EMBEDDINGS_DIM], dtype=np.float16)
 
