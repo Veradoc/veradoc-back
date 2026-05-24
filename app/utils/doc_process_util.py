@@ -23,7 +23,7 @@ text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024,
                                                chunk_overlap=64,
                                                length_function=len)
 
-def _download_from_s3_v2(bucket_name: str, object_key: str) -> str:
+def _download_from_s3(bucket_name: str, object_key: str) -> str:
     """
     Downloads a file from MinIO/S3 and saves it to a safe local temporary path.
     Returns the absolute path to the local file.
@@ -49,17 +49,19 @@ def _download_from_s3_v2(bucket_name: str, object_key: str) -> str:
     try:
         # 4. Stream the file directly from MinIO into our safe local path
         s3_client.download_file(bucket_name, object_key, local_path)
+
         return local_path
     except Exception as e:
         # If the download fails, clean up the empty file we just created
         if os.path.exists(local_path):
             os.remove(local_path)
+
         raise e
     
 def _ocr_image(file_path):
     """
     Extract text from image using Tesseract (tesseract) using spanish language 
-    This language packahe must be install in host (tesseract-lang)
+    This language package must be install in host (tesseract-lang)
     """
     image = Image.open(file_path)
     text = pytesseract.image_to_string(image, lang='spa')
@@ -74,7 +76,8 @@ def split_doc_by_chunks(bucket_name: str, object_key: str):
     sanitized_key = urllib.parse.unquote_plus(object_key).lstrip("/")
     
     # Get file type based on the cleaned key
-    ext = sanitized_key.lower().split(".")[-1]
+    #ext = sanitized_key.lower().split(".")[-1]
+    _, ext = os.path.splitext(object_key.lower())
 
     docs = []
     local_file = None
@@ -82,7 +85,7 @@ def split_doc_by_chunks(bucket_name: str, object_key: str):
     try:
         # 2. Download ALL files locally first using your working S3 helper.
         # This bypasses LangChain's internal temp_dir space-handling bugs.
-        local_file = _download_from_s3_v2(bucket_name, sanitized_key)
+        local_file = _download_from_s3(bucket_name, sanitized_key)
         
         if ext in ["png", "jpg", "jpeg"]:
             # OCR extraction
@@ -108,6 +111,7 @@ def split_doc_by_chunks(bucket_name: str, object_key: str):
             # Fallback loader for docx, txt, etc.
             loader = UnstructuredLoader(local_file)
             docs = loader.load()
+
             for d in docs:
                 d.metadata["source"] = sanitized_key
 
@@ -124,6 +128,7 @@ def split_doc_by_chunks(bucket_name: str, object_key: str):
     # Guard rail: Only split if we successfully read content
     if not docs:
         logger.warning(f"No document content recovered for {sanitized_key}. Returning empty splits.")
+
         return []
 
     # split documents
