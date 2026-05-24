@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 import numpy as np
 import pyarrow as pa
@@ -7,6 +8,8 @@ from lancedb.pydantic import LanceModel, Vector
 
 from app.utils.const import *
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 db = None
 table = None

@@ -1,8 +1,9 @@
+import logging
 import json
-from typing import Optional
 import requests
 import uuid
 import boto3
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select, func
 from fastapi import APIRouter, Depends, Request, Query
@@ -15,6 +16,8 @@ from app.routers.auth import User, current_active_user, get_async_session
 
 from app.models.conversation import Conversation
 from app.models.message import Message
+
+logger = logging.getLogger(__name__)
 
 s3 = boto3.client(
     "s3",

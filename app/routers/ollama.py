@@ -1,4 +1,4 @@
-
+import logging
 import uuid
 from contextlib import asynccontextmanager
 
@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from ollama import AsyncClient
 
 from app.utils.const import LLM_MODEL, TOP_VECTORS
@@ -15,6 +16,8 @@ from app.routers.huggingface import get_hf_model_info
 from app.routers.chat import set_active_model, set_top_vectors
 from app.routers.setting import SettingUpdatePayload, get_setting_by_key, save_key
 from app.models.model import Model
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1",
@@ -94,7 +97,7 @@ async def model_mapper(
     """,
     response_description="List of currently pulled models.",    
     dependencies=[Depends(current_active_user)])
-async def get_pulled_ollama_models(search: str = None):
+async def get_pulled_models(search: str = None):
     """
     Get Ollama compatible models from HuggenFace.
     The :search filer models (e.g., namespace/model).
@@ -122,11 +125,11 @@ async def get_pulled_ollama_models(search: str = None):
     return all_models
 
 @router.delete("/models/ollama/delete/{model_name:path}",
-    summary="Delete Ollama Model",
+    summary="Delete Model",
     description="Permanently removes the model files from the local Ollama storage.",
     dependencies=[Depends(current_active_superuser)] 
 )
-async def delete_ollama_model(model_name: str):
+async def delete_model(model_name: str):
     """
     Deletes a model using the Ollama SDK.
     The :path type allows for model names containing slashes (e.g., namespace/model).
@@ -158,7 +161,7 @@ async def delete_ollama_model(model_name: str):
         raise HTTPException(status_code=500, detail=f"Ollama SDK Error: {str(e)}")
     
 @router.post("/models/ollama/pull/{model_name:path}/{pipeline_tag}",
-    summary="Pull Ollama Model",
+    summary="Pull Model",
     description="""
     Initiates the pulling (or downloading) of a specific model into the Ollama engine. 
     This is a **streaming endpoint** that provides real-time progress logs.
@@ -212,14 +215,14 @@ async def pull_model(
 
 @router.post(
     "/models/ollama/start/{model_name:path}",
-    summary="Deploy/Start Ollama Model",
+    summary="Deploy/Start Model",
     description="""
     Initiates the loading (or downloading) of a specific model into the Ollama engine. 
     This is a **streaming endpoint** that provides real-time progress logs.
     """,
     response_description="A text stream of the CLI execution logs.",    
     dependencies=[Depends(current_active_superuser)])
-async def start_ollama_model(
+async def start_model(
     model_name: str,
     session: AsyncSession = Depends(get_async_session)):
     """
@@ -227,8 +230,6 @@ async def start_ollama_model(
     Uses StreamingResponse to provide real-time logs.
     """
     async def generate_logs():
-        #client = AsyncClient(host=settings.ollama_host)
-        
         try:
             yield f"Initiating load for: {model_name}\n"
             
@@ -295,20 +296,18 @@ async def start_ollama_model(
 
 @router.post(
     "/models/ollama/stop/{model_name:path}",
-    summary="Unload/Stop Ollama Model",
+    summary="Unload/Stop Model",
     description="""
     Forces the Ollama server to **unload a model from VRAM**. 
     This sets the `keep_alive` parameter to 0, immediately freeing up hardware resources.
     """,
     response_description="JSON confirmation of the stop command status.",    
     dependencies=[Depends(current_active_superuser)])
-async def stop_ollama_model(model_name: str):
+async def stop_model(model_name: str):
     """
     Unloads a model from Ollama memory.
     """
     async def generate_logs():
-        #client = AsyncClient(host=settings.ollama_host)
-
         try:
             yield f"Initiating unload for: {model_name}\n"
             

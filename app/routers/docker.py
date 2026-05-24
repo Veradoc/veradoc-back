@@ -1,10 +1,14 @@
+import logging
 import platform
 import docker
-from fastapi import APIRouter, HTTPException, Depends
-from app.routers.auth import current_active_superuser
 
+from fastapi import APIRouter, HTTPException, Depends
+
+from app.routers.auth import current_active_superuser
 from app.config import settings
 from app.utils.const import *
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1",

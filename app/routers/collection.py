@@ -1,10 +1,15 @@
+import logging
 import base64
 import hashlib
+
 import boto3
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.config import settings
 from app.routers.auth import User, current_active_user
+
+logger = logging.getLogger(__name__)
 
 s3 = boto3.client(
     "s3",

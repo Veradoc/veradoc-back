@@ -1,3 +1,5 @@
+import logging
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +10,8 @@ from app.routers.auth import lifespan_auth
 from app.routers.llm import lifespan_llm
 from app.routers.ollama import lifespan_ollama
 from app.routers import auth, collection, file, chat, llm, ollama, huggingface, docker, setting
+
+logger = logging.getLogger(__name__)
 
 def conf_openapi():
     if app.openapi_schema:

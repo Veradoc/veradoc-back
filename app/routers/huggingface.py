@@ -1,12 +1,17 @@
 
+import logging
+
 from typing import Literal, Optional, Union
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from huggingface_hub import HfApi, Organization, User
 from huggingface_hub.errors import HfHubHTTPError
-from pydantic import BaseModel
 
 from app.routers.auth import current_active_superuser
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1",

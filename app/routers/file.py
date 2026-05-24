@@ -1,3 +1,4 @@
+import logging
 import os
 import io
 import mimetypes
@@ -8,6 +9,8 @@ from fastapi.responses import StreamingResponse
 
 from app.config import settings
 from app.routers.auth import User, current_active_user
+
+logger = logging.getLogger(__name__)
 
 s3 = boto3.client(
     "s3",

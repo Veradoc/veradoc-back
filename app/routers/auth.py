@@ -1,18 +1,25 @@
+import logging
 import uuid
 from typing import Optional, List
+
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request, APIRouter, status, HTTPException
 from fastapi_users import FastAPIUsers, schemas, BaseUserManager, UUIDIDMixin
 from fastapi_users.authentication import AuthenticationBackend, BearerTransport, JWTStrategy
 from fastapi_users_db_sqlalchemy import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase
-from contextlib import asynccontextmanager
+
+
 from sqlalchemy import select, Column, String
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 from httpx_oauth.clients.google import GoogleOAuth2
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
 from app.utils.const import *
+
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = "sqlite+aiosqlite:///./db/veradoc.db"
 SECRET = "SECRET_KEY_CHANGE_THIS_IN_PRODUCTION"
