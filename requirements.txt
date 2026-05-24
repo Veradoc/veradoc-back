@@ -35,7 +35,6 @@ dnspython==2.8.0
 docker==7.1.0
 email-validator==2.3.0
 emoji==2.15.0
-en_core_web_sm==3.8.0
 et_xmlfile==2.0.0
 fastapi==0.136.0
 fastapi-users==15.0.5
