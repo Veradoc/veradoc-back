@@ -18,6 +18,7 @@ class DocsModel(LanceModel):
     parent_source: str
     source: str
     text: str
+    tags: list[str]
     vector: Vector(EMBEDDINGS_DIM, pa.float16()) # type: ignore
 
 def get_db():
@@ -28,6 +29,9 @@ def get_db():
             "s3://warehouse/v-db/",
             read_consistency_interval=timedelta(seconds=5)
         )
+
+    #db.drop_table("docs")  # replace with your DOCS_TABLE value
+    #print("Table dropped.")        
 
 def get_or_create_table():
     global table
@@ -51,8 +55,18 @@ def get_embedding(text):
 
     return np.array(resp.json()["embedding"][:EMBEDDINGS_DIM], dtype=np.float16)
 
-def search(query, limit=5):
+def search(query, limit=5, tags: list[str] = None):
     query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
-    res = get_or_create_table().search(query_embedding).metric("cosine").limit(limit)
+    
+    search_query = get_or_create_table().search(query_embedding).metric("cosine")
+    print(f"TRACK01: {search_query}")
 
-    return res
+    if tags:
+        # LanceDB SQL filter: check each tag is present in the array column
+        tag_conditions = " AND ".join(f"array_has(tags, '{tag}')" for tag in tags)
+        print(f"TRACK02: {tag_conditions}")
+        
+        search_query = search_query.where(tag_conditions)
+        print(f"TRACK03: {search_query}")
+
+    return search_query.limit(limit)

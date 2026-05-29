@@ -141,7 +141,8 @@ def create_metadata_task(json_data):
                 "text": chunk_json["page_content"],
                 "parent_source": chunk_json.get("metadata", {}).get("source", ""),
                 "source": f"{bucket_name}/{object_key}",
-                "vector": embeddings
+                "vector": embeddings,
+                "tags": list(chunk_json.get("metadata", {}).get("tags", []))          
             })
 
         except s3.exceptions.NoSuchKey:

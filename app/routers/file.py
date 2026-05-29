@@ -43,42 +43,56 @@ router = APIRouter(
 async def list_files(
     bucket_name: str = Query(..., description="Target bucket name"),
     path: str = Query(..., description="Folder path inside bucket"),
+    tags: str = Query(None, description="Comma-separated tags to filter by (e.g. 'invoice,finance')"),
     current_active_user: User = Depends(current_active_user)
 ):
     try:
         files_metadata = []
-        
+
         paginator = s3.get_paginator('list_objects_v2')
-        
-        # Ensure prefix ends with / to act as a directory
+
         if path and not path.endswith('/'):
             path += '/'
-
         path = path.replace(" ", "_")
 
-        # Iterate through pages (handles more than 1000 objects)
-        for page in paginator.paginate(Bucket=bucket_name, Prefix=path):
-            if 'Contents' in page:
-                for obj in page['Contents']:
-                    key = obj['Key']
-                    
-                    # Skip the folder object itself if it shows up in the list
-                    if key == path:
-                        continue
+        # Parse filter tags once, outside the loop
+        filter_tags = set(t.strip() for t in tags.split(",")) if tags else None
 
-                    files_metadata.append({
-                        "name": key.split('/')[-1],
-                        "full_path": key,
-                        "type": os.path.splitext(key)[1].replace('.', '') or 'file',
-                        "last_modified": obj['LastModified'].isoformat(),
-                        "size_bytes": obj['Size']
-                    })
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=path):
+            if 'Contents' not in page:
+                continue
+
+            for obj in page['Contents']:
+                key = obj['Key']
+
+                if key == path:
+                    continue
+
+                object_tags = []
+
+                # Only fetch tags if a filter is requested or we always want to return them
+                # Fetch tags for every object (for filtering and/or response)
+                tag_response = s3.get_object_tagging(Bucket=bucket_name, Key=key)
+                object_tags = [t["Key"] for t in tag_response.get("TagSet", [])]
+
+                # Skip object if it doesn't match ALL requested filter tags
+                if filter_tags and not filter_tags.issubset(set(object_tags)):
+                    continue
+
+                files_metadata.append({
+                    "name": key.split('/')[-1],
+                    "full_path": key,
+                    "type": os.path.splitext(key)[1].replace('.', '') or 'file',
+                    "last_modified": obj['LastModified'].isoformat(),
+                    "size_bytes": obj['Size'],
+                    "tags": object_tags
+                })
 
         return {
             "status": "success",
             "count": len(files_metadata),
             "files": files_metadata
-        } 
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -98,10 +112,17 @@ async def upload_files(
     bucket_name: str = Query(..., description="Target bucket name"),
     path: str = Query(..., description="Folder path inside bucket"),
     files: List[UploadFile] = File(...), # Changed to List
+    tags: str = Query(None, description="Comma-separated tags (e.g. 'invoice,finance,2024')"),
     current_active_user: User = Depends(current_active_user)
 ):
     uploaded_results = []
     errors = []
+
+    # Parse tags once, shared across all files
+    parsed_tags = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+    tagging = {
+        "TagSet": [{"Key": tag, "Value": "1"} for tag in parsed_tags]
+    } if parsed_tags else None
 
     for file in files:
         try:                
@@ -120,6 +141,16 @@ async def upload_files(
                 ContentType=file.content_type
             )
 
+            try:
+                if tagging:
+                    s3.put_object_tagging(
+                        Bucket=bucket_name,
+                        Key=object_key,
+                        Tagging=tagging
+                    )
+            except e:
+                print(e)
+                
             uploaded_results.append({
                 "filename": file.filename,
                 "status": "uploaded"
@@ -134,6 +165,7 @@ async def upload_files(
     return {
         "uploaded": uploaded_results,
         "bucket": bucket_name,
+        "tags": parsed_tags,        
         "failed": errors
     }
     

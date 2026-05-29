@@ -1,5 +1,6 @@
 import logging
 import json
+from pydantic import BaseModel
 import requests
 import uuid
 import boto3
@@ -46,6 +47,27 @@ def set_top_vectors(top_vectors: str):
     TOP_VECTORS = int(top_vectors)
     print(f"[STATE] Top Vectors LLM model configured for: {TOP_VECTORS}")
 
+class EmbeddingRequest(BaseModel):
+    prompt: str
+    
+@router.post("/promt/test")
+def test_promt(
+    payload: EmbeddingRequest,
+    tags: Optional[str] = None,
+    current_user: User = Depends(current_active_user)
+):
+    #user_question = "Resumen de la presentación que voy a realizar sobre Veradoc de no mas de 2 lineas"
+    #user_question = "Dame un resumen de no mas de dos líneas sobre la presentación del producto Veradoc"
+    #user_question = "List authors of the paper called: Multimodal Human Activity Recognition using fusion strategies"
+        
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",") if t.strip()]
+
+    res = search(payload.prompt, TOP_VECTORS, tags=tags)
+    documents = " ".join([d["text"].strip() for d in res.to_list()])
+    
+    return documents
+
 @router.post("/promt")
 async def chat_endpoint(
     request: Request,
@@ -56,6 +78,7 @@ async def chat_endpoint(
     conversation_id = data.get("conversationId")
     user_question = data.get("question")
     active_RAG = data.get("activeRAG")
+    tags = data.get("tags")
 
     # 1. Save User Conversation if is new or gte id
     if not conversation_id:
@@ -94,18 +117,31 @@ async def chat_endpoint(
     # Reverse to chronological order: [User, AI, User, AI...]
     history_msgs = [{"role": m.role, "content": m.content} for m in reversed(db_history)]
 
+    # convert tags string in a collection used for RAG if needed
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",") if t.strip()]
+
     async def event_generator():
         # 4. chek if the requets must be used knowledge base
         if (active_RAG):
-            # 4. Perform your search (RAG Logic) passing the top vectors to be recovered
-            res = search(user_question, TOP_VECTORS)
+            # 4. Perform your search (RAG Logic) passing the top vectors to be recovered and optional tags
+            res = search(user_question, TOP_VECTORS, tags=tags)
             documents = " ".join([d["text"].strip() for d in res.to_list()])
 
             content = RAG_PROMPT.format(user_question=user_question, documents=documents)
 
             # Prepare the context dataframe equivalent for the frontend
             # We send this as the FIRST chunk so the UI updates the table immediately
-            context_data = res.to_pandas().drop(columns=['source', 'vector']).to_dict(orient="records")
+            context_df = res.to_pandas().drop(columns=['source', 'vector'])
+
+            # Convert any ndarray columns to lists for JSON serialization
+            for col in context_df.columns:
+                if context_df[col].dtype == object:
+                    context_df[col] = context_df[col].apply(
+                        lambda x: x.tolist() if hasattr(x, 'tolist') else x
+                    )
+
+            context_data = context_df.to_dict(orient="records")
 
             yield f"data: {json.dumps({'type': 'id', 'conversation_id': conversation_id})}\n\n"
             yield f"data: {json.dumps({'type': 'context', 'data': context_data})}\n\n"            
