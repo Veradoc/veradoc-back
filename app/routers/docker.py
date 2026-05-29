@@ -17,7 +17,7 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-DEF_STACK="veradoc-web"
+DEF_STACK="veradoc"
 
 def get_docker_client():
     """

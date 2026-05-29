@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select, func
 from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import StreamingResponse
+import pynvml
 
 from app.utils.const import *
 from app.utils.vector_util import search
@@ -45,6 +46,26 @@ def set_top_vectors(top_vectors: str):
 
     TOP_VECTORS = int(top_vectors)
     print(f"[STATE] Top Vectors LLM model configured for: {TOP_VECTORS}")
+
+def get_ollama_gpu_options() -> dict:
+    try:        
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+        vram_mb = mem_info.total / 1024 / 1024
+
+        if vram_mb >= 8000:
+            return {"num_gpu": 99, "num_ctx": 4096}
+        elif vram_mb >= 4000:
+            return {"num_gpu": 99, "num_ctx": 2048}
+        else:
+            return {"num_gpu": 0, "num_ctx": 512}   # GTX 745
+
+    except Exception:
+        # pynvml not available or no NVIDIA GPU
+        return {"num_gpu": 0, "num_ctx": 512}
+
+gpu_options = get_ollama_gpu_options()
 
 @router.post("/promt")
 async def chat_endpoint(
@@ -132,8 +153,9 @@ async def chat_endpoint(
                 "options": {
                     "temperature": 0,
                     "top_p": 0.90,
-                    'num_ctx': 2048,    # reduce memory footprint
-                    'num_thread': 4,    # limit CPU threads                    
+                    'num_thread': 4,  # limit CPU threads
+                    #'num_ctx': 2048, # reduce memory footprint                    
+                    **gpu_options     # merges num_gpu and num_ctx                    
                 }
             },
             stream=True
