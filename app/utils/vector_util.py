@@ -59,14 +59,11 @@ def search(query, limit=5, tags: list[str] = None):
     query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
     
     search_query = get_or_create_table().search(query_embedding).metric("cosine")
-    print(f"TRACK01: {search_query}")
 
     if tags:
         # LanceDB SQL filter: check each tag is present in the array column
         tag_conditions = " AND ".join(f"array_has(tags, '{tag}')" for tag in tags)
-        print(f"TRACK02: {tag_conditions}")
         
         search_query = search_query.where(tag_conditions)
-        print(f"TRACK03: {search_query}")
 
     return search_query.limit(limit)

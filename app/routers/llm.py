@@ -112,6 +112,7 @@ async def receive_metadata_webhook(request: Request, background_tasks: Backgroun
     if json_data["EventName"] == "s3:ObjectRemoved:Delete":
         print("Metadata deleted!")
         background_tasks.add_task(delete_metadata_task, json_data)
+
     return {"status": "success"}
 
 def create_metadata_task(json_data):
@@ -178,9 +179,9 @@ def create_object_task(json_data):
             continue
 
         try:
-            doc_splits = split_doc_by_chunks(bucket_name, object_key)
+            chunks = split_doc_by_chunks(bucket_name, object_key)
 
-            for i, chunk in enumerate(doc_splits):
+            for i, chunk in enumerate(chunks):
                 # Prepare the JSON data
                 chunk_data = chunk.json()
 
@@ -279,6 +280,7 @@ def delete_object_task(json_data) -> str:
 
 def clear_events():
     global context_df
+
     context_df = []
 
     return context_df
