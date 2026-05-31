@@ -42,40 +42,41 @@ router = APIRouter(
 )
 async def list_files(
     bucket_name: str = Query(..., description="Target bucket name"),
-    path: str = Query(..., description="Folder path inside bucket"),
-    tags: str = Query(None, description="Comma-separated tags to filter by (e.g. 'invoice,finance')"),
+    path: str = Query(None, description="Folder path inside bucket (optional, lists all if omitted)"),
+    tags: str = Query(None, description="Comma-separated tags to filter by"),
     current_active_user: User = Depends(current_active_user)
 ):
     try:
         files_metadata = []
-
         paginator = s3.get_paginator('list_objects_v2')
 
-        if path and not path.endswith('/'):
-            path += '/'
-        path = path.replace(" ", "_")
+        # Build prefix: None means list everything in the bucket
+        prefix = ""
+        if path:
+            prefix = path.replace(" ", "_")
+            if not prefix.endswith('/'):
+                prefix += '/'
 
-        # Parse filter tags once, outside the loop
         filter_tags = set(t.strip() for t in tags.split(",")) if tags else None
 
-        for page in paginator.paginate(Bucket=bucket_name, Prefix=path):
+        paginate_kwargs = {"Bucket": bucket_name}
+        if prefix:
+            paginate_kwargs["Prefix"] = prefix
+
+        for page in paginator.paginate(**paginate_kwargs):
             if 'Contents' not in page:
                 continue
 
             for obj in page['Contents']:
                 key = obj['Key']
 
-                if key == path:
+                # Skip "folder" entries (keys ending in /)
+                if key.endswith('/'):
                     continue
 
-                object_tags = []
-
-                # Only fetch tags if a filter is requested or we always want to return them
-                # Fetch tags for every object (for filtering and/or response)
                 tag_response = s3.get_object_tagging(Bucket=bucket_name, Key=key)
                 object_tags = [t["Key"] for t in tag_response.get("TagSet", [])]
 
-                # Skip object if it doesn't match ALL requested filter tags
                 if filter_tags and not filter_tags.issubset(set(object_tags)):
                     continue
 
