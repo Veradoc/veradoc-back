@@ -1,15 +1,15 @@
 import logging
 import json
-from pydantic import BaseModel
 import requests
 import uuid
 import boto3
+import pynvml
+from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select, func
 from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import StreamingResponse
-import pynvml
 
 from app.utils.const import *
 from app.utils.vector_util import search
@@ -56,14 +56,16 @@ def get_model_gpu_options() -> dict:
         mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
         vram_mb = mem_info.total / 1024 / 1024
 
-        if vram_mb >= 8000:
-            return {"num_gpu": 99, "num_ctx": 4096}
-        elif vram_mb >= 4000:
-            return {"num_gpu": 99, "num_ctx": 2048}
-        else:
-            return {"num_gpu": 0, "num_ctx": 512}
+        if vram_mb >= 8000:       # 8GB+ a full GPU, large context window (num_ctx  >  system_prompt + history + retrieved_chunks + question + expected_response)
+            return {"num_gpu": 99, "num_ctx": 32768}
+        elif vram_mb >= 6000:     # 6GB  a full GPU, moderate context window
+            return {"num_gpu": 99, "num_ctx": 16384}
+        elif vram_mb >= 4000:     # 4GB  a full GPU, safe context window
+            return {"num_gpu": 99, "num_ctx": 8192}
+        else:                     # CPU fallback
+            return {"num_gpu": 0, "num_ctx": 2048}
     except Exception:
-        return {"num_gpu": 0, "num_ctx": 512}
+        return {"num_gpu": 0, "num_ctx": 2048}
 
 gpu_options = get_model_gpu_options()
 
