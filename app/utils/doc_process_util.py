@@ -1,35 +1,46 @@
+import os
 import logging
 import tempfile
 import urllib.parse
 
 import boto3
-from botocore.client import Config
-
-from PIL import Image
 import pytesseract
-import aspose.words as aw
-
-from langchain_unstructured import UnstructuredLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
+from PIL import Image
+from botocore.config import Config
+from langchain_community.document_loaders import PyPDFLoader, UnstructuredFileLoader
 from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from unstructured.partition.auto import partition
 
 from app.config import settings
 from app.utils.const import *
 
+try:
+    import aspose.words as aw
+    ASPOSE_AVAILABLE = True
+except ImportError:
+    ASPOSE_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024,
-                                               chunk_overlap=64,
-                                               length_function=len)
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1024,
+    chunk_overlap=64,
+    length_function=len
+)
+
+
+def get_text_splitter():
+    return text_splitter
+
 
 def _download_from_s3(bucket_name: str, object_key: str) -> tuple[str, list[str]]:
     """
-    Downloads a file from MinIO/S3 and saves it to a safe local temporary path.
+    Downloads a file from MinIO/S3 into a safe local temporary path.
     Returns a tuple of (absolute local path, list of tags).
     """
-    s3_client = boto3.client(
-        's3',
+    s3 = boto3.client(
+        "s3",
         endpoint_url=settings.minio_endpoint,
         aws_access_key_id=settings.minio_access_key,
         aws_secret_access_key=settings.minio_secret_key,
@@ -38,14 +49,13 @@ def _download_from_s3(bucket_name: str, object_key: str) -> tuple[str, list[str]
 
     _, ext = os.path.splitext(object_key.lower())
 
-    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as temp_file:
-        local_path = temp_file.name
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        local_path = tmp.name
 
     try:
-        s3_client.download_file(bucket_name, object_key, local_path)
+        s3.download_file(bucket_name, object_key, local_path)
 
-        # Fetch object tags
-        tag_response = s3_client.get_object_tagging(Bucket=bucket_name, Key=object_key)
+        tag_response = s3.get_object_tagging(Bucket=bucket_name, Key=object_key)
         tags = [t["Key"] for t in tag_response.get("TagSet", [])]
 
         return local_path, tags
@@ -53,46 +63,47 @@ def _download_from_s3(bucket_name: str, object_key: str) -> tuple[str, list[str]
         if os.path.exists(local_path):
             os.remove(local_path)
         raise e
-    
-def _ocr_image(file_path):
+
+
+def _ocr_image(file_path: str) -> str:
     """
-    Extract text from image using Tesseract (tesseract) using spanish language 
-    This language package must be install in host (tesseract-lang)
+    Extract text from image using Tesseract with Spanish language.
+    Requires tesseract-lang package installed on host.
     """
     image = Image.open(file_path)
     text = pytesseract.image_to_string(image, lang='spa')
-
     return text
 
-def get_text_splitter():
-    return text_splitter
 
-def split_doc_by_chunks(bucket_name: str, object_key: str):
+def split_doc_by_chunks(bucket_name: str, object_key: str) -> list:
+    # Decode special characters and drop leading slashes
     sanitized_key = urllib.parse.unquote_plus(object_key).lstrip("/")
-    _, ext = os.path.splitext(object_key.lower())
+    _, ext = os.path.splitext(sanitized_key.lower())
 
     docs = []
     local_file = None
 
     try:
-        # Unpack path and tags together
         local_file, tags = _download_from_s3(bucket_name, sanitized_key)
 
-        if ext in ["png", "jpg", "jpeg"]:
+        if ext in [".png", ".jpg", ".jpeg"]:
             text = _ocr_image(local_file)
             docs = [Document(page_content=text, metadata={"source": sanitized_key})]
 
-        elif ext == "pdf":
+        elif ext == ".pdf":
             loader = PyPDFLoader(local_file)
             docs = loader.load()
 
-        elif ext == "doc":
+        elif ext == ".doc":
+            if not ASPOSE_AVAILABLE:
+                raise ImportError("aspose.words is required to process .doc files")
             doc = aw.Document(local_file)
             text_content = doc.get_text()
             docs = [Document(page_content=text_content, metadata={"source": sanitized_key})]
 
         else:
-            loader = UnstructuredLoader(local_file)
+            # Fallback for .docx, .txt, etc.
+            loader = UnstructuredFileLoader(local_file)
             docs = loader.load()
             for d in docs:
                 d.metadata["source"] = sanitized_key
@@ -107,13 +118,13 @@ def split_doc_by_chunks(bucket_name: str, object_key: str):
                 logger.warning(f"Failed to delete temp file {local_file}: {cleanup_error}")
 
     if not docs:
-        logger.warning(f"No document content recovered for {sanitized_key}. Returning empty splits.")
+        logger.warning(f"No content recovered for '{sanitized_key}'. Returning empty splits.")
         return []
 
-    chunks = text_splitter.split_documents(docs)
+    doc_splits = text_splitter.split_documents(docs)
 
-    # Inject tags into every chunk's metadata
-    for chunk in chunks:
-        chunk.metadata["tags"] = tags
+    # Inject tags into every chunk metadata
+    for chunk in doc_splits:
+        chunk.metadata["tags"] = list(tags)
 
-    return chunks
+    return doc_splits
