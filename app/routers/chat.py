@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import StreamingResponse
 
 from app.utils.const import *
-from app.utils.vector_util import search
+from app.utils.vector_util import search, search_reranker
 from app.config import settings
 from app.routers.auth import User, current_active_user, get_async_session
 
@@ -85,7 +85,8 @@ def test_promt(
     if isinstance(tags, str):
         tags = [t.strip() for t in tags.split(",") if t.strip()]
 
-    res = search(payload.prompt, TOP_VECTORS, tags=tags)
+    #res = search(payload.prompt, TOP_VECTORS, tags=tags)
+    res = search_reranker(payload.prompt, TOP_VECTORS, tags=tags)
     documents = " ".join([d["text"].strip() for d in res.to_list()])
     
     return documents
