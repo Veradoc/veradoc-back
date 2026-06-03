@@ -4,7 +4,10 @@ from app.config import settings
 
 # LLM configurations
 LLM_MODEL = "hf.co/unsloth/Llama-3.2-3B-Instruct-GGUF:latest"
-EMBEDDING_MODEL = "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:latest"
+#EMBEDDING_MODEL = "hf.co/nomic-ai/nomic-embed-text-v1.5-GGUF:latest"
+EMBEDDING_MODEL = "hf.co/Ralriki/multilingual-e5-large-instruct-GGUF"
+RERANKER_MODEL = "hf.co/gpustack/bge-reranker-v2-m3-GGUF:latest"
+TOP_RERANKER_VECTORS = 20
 TOP_VECTORS = 5
 
 # Google configurations
@@ -20,10 +23,12 @@ os.environ["ALLOW_HTTP"] = "True"
 
 # RAG configurations
 DOCS_TABLE = "docs"
-EMBEDDINGS_DIM = 768
+#EMBEDDINGS_DIM = 768
+EMBEDDINGS_DIM = 1024
 METADATA_PREFIX = "metadata"
 EMBEDDING_DOCUMENT_PREFIX = "search_document"
-EMBEDDING_QUERY_PREFIX = "search_query"
+#EMBEDDING_QUERY_PREFIX = "search_query"
+EMBEDDING_QUERY_PREFIX = "query"
 BUCKET_NAME = "custom-corpus"
 
 # RAG prompt template
