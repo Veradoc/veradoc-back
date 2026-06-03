@@ -9,9 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.setting import Setting
 from app.routers.auth import current_active_user, get_async_session
-from app.routers.chat import set_top_vectors
+from app.routers.chat import set_top_vectors, set_top_rerankers_vectors
 
 TOP_VECTORS_KEYS = "TOP_VECTORS"
+TOP_RERANKER_VECTORS_KEYS = "TOP_RERANKER_VECTORS"
 
 router = APIRouter(
     prefix="/api/v1/settings",
@@ -74,7 +75,10 @@ async def save_key(
     # set running model for next chat
     if key == TOP_VECTORS_KEYS:
         set_top_vectors(payload.value)
-        
+
+    if key == TOP_RERANKER_VECTORS_KEYS:
+        set_top_rerankers_vectors(payload.value)
+
     try:
         # Commit the transaction to disk
         await session.commit()

@@ -9,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ollama import AsyncClient
 
-from app.utils.const import LLM_MODEL, TOP_VECTORS
+from app.utils.const import LLM_MODEL, DEF_TOP_VECTORS, DEF_TOP_RERANKER_VECTORS
 from app.config import settings
 from app.routers.auth import current_active_superuser, current_active_user, async_session_maker, get_async_session
 from app.routers.huggingface import get_hf_model_info
-from app.routers.chat import set_active_model, set_top_vectors
+from app.routers.chat import set_active_model, set_top_vectors, set_top_rerankers_vectors
 from app.routers.setting import SettingUpdatePayload, get_setting_by_key, save_key
 from app.models.model import Model
 
@@ -26,6 +26,7 @@ router = APIRouter(
 
 ACTIVE_LLM_MODEL_KEY = "ACTIVE_MODEL"
 TOP_VECTORS_KEY = "TOP_VECTORS"
+TOP_RERANKER_VECTORS_KEY = "TOP_RERANKER_VECTORS"
 
 @asynccontextmanager
 async def lifespan_ollama(app: FastAPI):    
@@ -33,7 +34,8 @@ async def lifespan_ollama(app: FastAPI):
         try:
             # system models configuration
             llm_model_setting = await get_setting_by_key(ACTIVE_LLM_MODEL_KEY, session)
-            top_vectors_setting = await get_setting_by_key(TOP_VECTORS_KEY, session)            
+            top_vectors_setting = await get_setting_by_key(TOP_VECTORS_KEY, session)
+            top_reranker_vectors_setting = await get_setting_by_key(TOP_RERANKER_VECTORS_KEY, session)
 
             if llm_model_setting and llm_model_setting.value:                
                 set_active_model(llm_model_setting.value)
@@ -46,12 +48,20 @@ async def lifespan_ollama(app: FastAPI):
                 set_top_vectors(top_vectors_setting.value)
                 print(f"[LIFESPAN] Successfully recovery top vectors: {top_vectors_setting.value}")
             else:
-                set_top_vectors(TOP_VECTORS)
+                set_top_vectors(DEF_TOP_VECTORS)
+                print("[LIFESPAN] No model configuration found. Using default preset.")
+
+            if top_reranker_vectors_setting and top_reranker_vectors_setting.value:                
+                set_top_rerankers_vectors(top_reranker_vectors_setting.value)
+                print(f"[LIFESPAN] Successfully recovery top rerankers vectors: {top_reranker_vectors_setting.value}")
+            else:
+                set_top_rerankers_vectors(DEF_TOP_RERANKER_VECTORS)
                 print("[LIFESPAN] No model configuration found. Using default preset.")
 
         except Exception as e:
             set_active_model(LLM_MODEL)
-            set_top_vectors(TOP_VECTORS)
+            set_top_vectors(DEF_TOP_VECTORS)
+            set_top_rerankers_vectors(DEF_TOP_RERANKER_VECTORS)
 
             print(f"[LIFESPAN ERROR] Failed to fetch settings from DB, set default model configuratins: {e}")
 

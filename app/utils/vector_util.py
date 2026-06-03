@@ -22,7 +22,7 @@ class DocsModel(LanceModel):
     text: str
     tags: list[str]
     vector: Vector(EMBEDDINGS_DIM, pa.float16()) # type: ignore
-
+    
 def get_db():
     global db
 
@@ -57,7 +57,7 @@ def get_embedding(text):
 
     return np.array(resp.json()["embedding"][:EMBEDDINGS_DIM], dtype=np.float16)
 
-def search(query, limit=5, tags: list[str] = None):
+def search(query, top_vectors=8, tags: list[str] = None):
     query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
     
     search_query = get_or_create_table().search(query_embedding).metric("cosine")
@@ -68,9 +68,9 @@ def search(query, limit=5, tags: list[str] = None):
         
         search_query = search_query.where(tag_conditions)
 
-    return search_query.limit(limit)
+    return search_query.limit(top_vectors)
 
-def search_reranker(query, limit=5, tags: list[str] = None):
+def search_reranker(query, top_vectors, top_reranker_vectors, tags: list[str] = None):
     query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
     
     search_query = get_or_create_table().search(query_embedding).metric("cosine")
@@ -81,16 +81,14 @@ def search_reranker(query, limit=5, tags: list[str] = None):
         
         search_query = search_query.where(tag_conditions)
 
-    canditatos_db = search_query.limit(TOP_RERANKER_VECTORS)
+    canditatos_db = search_query.limit(top_reranker_vectors).to_list()
 
     if not canditatos_db:
         return []
     
-    # 3. Extraemos los textos para el Reranker de Ollama
     documentos_texto = [doc["text"] for doc in canditatos_db]
 
     try:
-        # 4. Llamada al Reranker (A Ollama no le importan los vectores aquí, solo el texto plano)
         rerank_response = ollama.post(
             model=RERANKER_MODEL,
             json={
@@ -107,10 +105,11 @@ def search_reranker(query, limit=5, tags: list[str] = None):
             idx = res["index"]
             doc_original = canditatos_db[idx]
             doc_original["rerank_score"] = res["relevance_score"]
+
             documentos_rerankeados.append(doc_original)
             
-        return documentos_rerankeados[:limit]
+        return documentos_rerankeados[:top_vectors]
 
     except Exception as e:
         print(f"Error en el Reranker, devolviendo fallback de LanceDB: {e}")
-        return canditatos_db[:limit]    
+        return canditatos_db[:top_vectors]    

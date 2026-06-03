@@ -1,5 +1,6 @@
 import logging
 import json
+import pandas as pd
 import requests
 import uuid
 import boto3
@@ -46,7 +47,13 @@ def set_top_vectors(top_vectors: str):
     global TOP_VECTORS
 
     TOP_VECTORS = int(top_vectors)
-    print(f"[STATE] Top Vectors LLM model configured for: {TOP_VECTORS}")
+    print(f"[STATE] Top Vectors Embedded model configured for: {TOP_VECTORS}")
+
+def set_top_rerankers_vectors(top_reranker_vectors: str):
+    global TOP_RERANKER_VECTORS
+
+    TOP_RERANKER_VECTORS = int(top_reranker_vectors)
+    print(f"[STATE] Top Reranker Vectors Embedded model configured for: {TOP_RERANKER_VECTORS}")
 
 def get_model_gpu_options() -> dict:
     try:        
@@ -85,10 +92,12 @@ def test_promt(
     if isinstance(tags, str):
         tags = [t.strip() for t in tags.split(",") if t.strip()]
 
-    #res = search(payload.prompt, TOP_VECTORS, tags=tags)
-    res = search_reranker(payload.prompt, TOP_VECTORS, tags=tags)
-    documents = " ".join([d["text"].strip() for d in res.to_list()])
+    #res = search(payload.prompt, TOP_VECTORS, tags=tags)    
+    #documents = " ".join([d["text"].strip() for d in res.to_list()])
     
+    res = search_reranker(payload.prompt, TOP_VECTORS, TOP_RERANKER_VECTORS, tags=tags)
+    documents = " ".join([d["text"].strip() for d in res])
+
     return documents
 
 @router.post("/promt")
@@ -148,14 +157,18 @@ async def chat_endpoint(
         # 4. chek if the requets must be used knowledge base
         if (active_RAG):
             # 4. Perform your search (RAG Logic) passing the top vectors to be recovered and optional tags
-            res = search(user_question, TOP_VECTORS, tags=tags)
-            documents = " ".join([d["text"].strip() for d in res.to_list()])
+            #res = search(user_question, TOP_VECTORS, tags=tags)            
+            #documents = " ".join([d["text"].strip() for d in res.to_list()])
+
+            res = search_reranker(user_question, TOP_VECTORS, TOP_RERANKER_VECTORS, tags=tags)
+            documents = " ".join([d["text"].strip() for d in res])
 
             content = RAG_PROMPT.format(user_question=user_question, documents=documents)
 
             # Prepare the context dataframe equivalent for the frontend
             # We send this as the FIRST chunk so the UI updates the table immediately
-            context_df = res.to_pandas().drop(columns=['source', 'vector'])
+            #context_df = res.to_pandas().drop(columns=['source', 'vector'])
+            context_df = pd.DataFrame(res).drop(columns=['source', 'vector'], errors='ignore')
 
             # Convert any ndarray columns to lists for JSON serialization
             for col in context_df.columns:
