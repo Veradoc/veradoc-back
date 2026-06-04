@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.utils.const import *
 from app.utils.doc_process_util import split_doc_by_chunks
-from app.utils.vector_util import get_embedding, get_or_create_table, search
+from app.utils.vector_util import get_embedding, get_or_create_table
 from app.routers.auth import engine, Base
 
 logger = logging.getLogger(__name__)

@@ -1,12 +1,14 @@
+import threading
 import logging
 from datetime import timedelta
 import numpy as np
 import pyarrow as pa
 import requests
 
-import ollama
 import lancedb
 from lancedb.pydantic import LanceModel, Vector
+
+from sentence_transformers import CrossEncoder
 
 from app.utils.const import *
 from app.config import settings
@@ -22,7 +24,18 @@ class DocsModel(LanceModel):
     text: str
     tags: list[str]
     vector: Vector(EMBEDDINGS_DIM, pa.float16()) # type: ignore
-    
+
+_reranker_model: CrossEncoder | None = None
+_reranker_lock = threading.Lock()
+
+def get_reranker() -> CrossEncoder:
+    global _reranker_model
+    if _reranker_model is None:
+        with _reranker_lock:
+            if _reranker_model is None:
+                _reranker_model = CrossEncoder(RERANKER_MODEL)
+    return _reranker_model
+
 def get_db():
     global db
 
@@ -33,7 +46,7 @@ def get_db():
         )
 
     #db.drop_table("docs")  # replace with your DOCS_TABLE value
-    #print("Table dropped.")        
+    #print("Table dropped.")
 
 def get_or_create_table():
     global table
@@ -49,67 +62,53 @@ def get_or_create_table():
     return table
 
 def get_embedding(text):
-    resp = requests.post(settings.ollama_host + "/api/embeddings",
-                         json={"model": EMBEDDING_MODEL, "prompt": text})
-
-    # Log the real dimension once to make sure your config is correct
-    #print(f"Model {EMBEDDING_MODEL} returned {len(resp.json()["embedding"])} dims")
+    resp = requests.post(
+        settings.ollama_host + "/api/embeddings",
+        json={
+            "model": EMBEDDING_MODEL,
+            "prompt": text
+        }
+    )
 
     return np.array(resp.json()["embedding"][:EMBEDDINGS_DIM], dtype=np.float16)
 
-def search(query, top_vectors=8, tags: list[str] = None):
+def search(query, top_vectors, tags: list[str] = None):
     query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
-    
+
     search_query = get_or_create_table().search(query_embedding).metric("cosine")
 
     if tags:
         # LanceDB SQL filter: check each tag is present in the array column
         tag_conditions = " AND ".join(f"array_has(tags, '{tag}')" for tag in tags)
-        
         search_query = search_query.where(tag_conditions)
 
     return search_query.limit(top_vectors)
 
 def search_reranker(query, top_vectors, top_reranker_vectors, tags: list[str] = None):
     query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
-    
     search_query = get_or_create_table().search(query_embedding).metric("cosine")
 
     if tags:
         # LanceDB SQL filter: check each tag is present in the array column
         tag_conditions = " AND ".join(f"array_has(tags, '{tag}')" for tag in tags)
-        
         search_query = search_query.where(tag_conditions)
 
-    canditatos_db = search_query.limit(top_reranker_vectors).to_list()
+    candidates = search_query.limit(top_reranker_vectors).to_list()
 
-    if not canditatos_db:
+    if not candidates:
         return []
-    
-    documentos_texto = [doc["text"] for doc in canditatos_db]
+
+    texts = [doc["text"] for doc in candidates]
+    pairs = [(query, text) for text in texts]
 
     try:
-        rerank_response = ollama.post(
-            model=RERANKER_MODEL,
-            json={
-                "query": query,
-                "documents": documentos_texto
-            }
-        )
-        
-        resultados_ordenados = rerank_response.json().get("results", [])
-        
-        # 5. Reordenamos los objetos devueltos por LanceDB
-        documentos_rerankeados = []
-        for res in resultados_ordenados:
-            idx = res["index"]
-            doc_original = canditatos_db[idx]
-            doc_original["rerank_score"] = res["relevance_score"]
+        scores = get_reranker().predict(pairs)  # ndarray of float32
 
-            documentos_rerankeados.append(doc_original)
-            
-        return documentos_rerankeados[:top_vectors]
+        for doc, score in zip(candidates, scores):
+            doc["rerank_score"] = float(score)
+
+        return sorted(candidates, key=lambda d: d["rerank_score"], reverse=True)[:top_vectors]
 
     except Exception as e:
-        print(f"Error en el Reranker, devolviendo fallback de LanceDB: {e}")
-        return canditatos_db[:top_vectors]    
+        print(f"[reranker] CrossEncoder failed, falling back to LanceDB order: {e}")
+        return candidates[:top_vectors]

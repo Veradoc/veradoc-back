@@ -84,16 +84,9 @@ def test_promt(
     payload: EmbeddingRequest,
     tags: Optional[str] = None,
     current_user: User = Depends(current_active_user)
-):
-    #user_question = "Resumen de la presentación que voy a realizar sobre Veradoc de no mas de 2 lineas"
-    #user_question = "Dame un resumen de no mas de dos líneas sobre la presentación del producto Veradoc"
-    #user_question = "List authors of the paper called: Multimodal Human Activity Recognition using fusion strategies"
-        
+):        
     if isinstance(tags, str):
         tags = [t.strip() for t in tags.split(",") if t.strip()]
-
-    #res = search(payload.prompt, TOP_VECTORS, tags=tags)    
-    #documents = " ".join([d["text"].strip() for d in res.to_list()])
     
     res = search_reranker(payload.prompt, TOP_VECTORS, TOP_RERANKER_VECTORS, tags=tags)
     documents = " ".join([d["text"].strip() for d in res])
@@ -156,19 +149,23 @@ async def chat_endpoint(
     async def event_generator():
         # 4. chek if the requets must be used knowledge base
         if (active_RAG):
-            # 4. Perform your search (RAG Logic) passing the top vectors to be recovered and optional tags
-            #res = search(user_question, TOP_VECTORS, tags=tags)            
-            #documents = " ".join([d["text"].strip() for d in res.to_list()])
+            # Perform your search (RAG Logic) passing the top vectors to be recovered and optional tags
+            res = search(user_question, TOP_VECTORS, tags=tags)            
+            documents = " ".join([d["text"].strip() for d in res.to_list()])
 
-            res = search_reranker(user_question, TOP_VECTORS, TOP_RERANKER_VECTORS, tags=tags)
-            documents = " ".join([d["text"].strip() for d in res])
+            # Perform your search (RAG Logic) passing the top vectors to be recovered and optional tags with Rerank
+            #res = search_reranker(user_question, TOP_VECTORS, TOP_RERANKER_VECTORS, tags=tags)
+            #documents = " ".join([d["text"].strip() for d in res])
 
             content = RAG_PROMPT.format(user_question=user_question, documents=documents)
 
             # Prepare the context dataframe equivalent for the frontend
             # We send this as the FIRST chunk so the UI updates the table immediately
-            #context_df = res.to_pandas().drop(columns=['source', 'vector'])
-            context_df = pd.DataFrame(res).drop(columns=['source', 'vector'], errors='ignore')
+            context_df = res.to_pandas().drop(columns=['source', 'vector'])
+
+            # Prepare the context dataframe equivalent for the frontend
+            # We send this as the FIRST chunk so the UI updates the table immediately with Rerank            
+            #context_df = pd.DataFrame(res).drop(columns=['source', 'vector'], errors='ignore')
 
             # Convert any ndarray columns to lists for JSON serialization
             for col in context_df.columns:
@@ -180,8 +177,7 @@ async def chat_endpoint(
             context_data = context_df.to_dict(orient="records")
 
             yield f"data: {json.dumps({'type': 'id', 'conversation_id': conversation_id})}\n\n"
-            yield f"data: {json.dumps({'type': 'context', 'data': context_data})}\n\n"            
-
+            yield f"data: {json.dumps({'type': 'context', 'data': context_data})}\n\n"
         else:
             content = user_question
         
@@ -205,8 +201,8 @@ async def chat_endpoint(
                     "temperature": 0,
                     "top_p": 0.90,
                     'num_thread': 4,  # limit CPU threads
-                    'num_ctx': 2048, # reduce memory footprint                    
-                    #**gpu_options     # merges num_gpu and num_ctx                    
+                    'num_ctx': 2048,  # reduce memory footprint                    
+                    #**gpu_options    # merges num_gpu and num_ctx                    
                 }
             },
             stream=True
