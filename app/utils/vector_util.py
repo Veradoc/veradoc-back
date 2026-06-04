@@ -4,6 +4,7 @@ from datetime import timedelta
 import numpy as np
 import pyarrow as pa
 import requests
+import torch
 
 import lancedb
 from lancedb.pydantic import LanceModel, Vector
@@ -28,12 +29,29 @@ class DocsModel(LanceModel):
 _reranker_model: CrossEncoder | None = None
 _reranker_lock = threading.Lock()
 
+def _get_best_device() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        return "mps"
+    return "cpu"
+
 def get_reranker() -> CrossEncoder:
     global _reranker_model
+
     if _reranker_model is None:
         with _reranker_lock:
             if _reranker_model is None:
-                _reranker_model = CrossEncoder(RERANKER_MODEL)
+                device = _get_best_device()
+                
+                print(f"[reranker] Loading {RERANKER_MODEL} on {device}...")
+
+                _reranker_model = CrossEncoder(
+                    RERANKER_MODEL,
+                    device=device,
+                    trust_remote_code=True)
+                
+                print(f"[reranker] Model ready on {device}")                
     return _reranker_model
 
 def get_db():

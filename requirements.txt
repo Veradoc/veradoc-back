@@ -39,6 +39,7 @@ deprecation==2.1.0
 dill==0.4.1
 dnspython==2.8.0
 docker==7.1.0
+einops==0.8.2
 email-validator==2.3.0
 emoji==2.15.0
 et_xmlfile==2.0.0
@@ -50,7 +51,7 @@ filetype==1.2.0
 flatbuffers==25.12.19
 fonttools==4.62.1
 frozenlist==1.8.0
-fsspec>=2023.1.0,<=2026.2.0
+fsspec==2026.2.0
 google-api-core==2.30.3
 google-auth==2.49.2
 google-cloud-vision==3.13.0

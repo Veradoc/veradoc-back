@@ -150,22 +150,22 @@ async def chat_endpoint(
         # 4. chek if the requets must be used knowledge base
         if (active_RAG):
             # Perform your search (RAG Logic) passing the top vectors to be recovered and optional tags
-            res = search(user_question, TOP_VECTORS, tags=tags)            
-            documents = " ".join([d["text"].strip() for d in res.to_list()])
+            #res = search(user_question, TOP_VECTORS, tags=tags)            
+            #documents = " ".join([d["text"].strip() for d in res.to_list()])
 
             # Perform your search (RAG Logic) passing the top vectors to be recovered and optional tags with Rerank
-            #res = search_reranker(user_question, TOP_VECTORS, TOP_RERANKER_VECTORS, tags=tags)
-            #documents = " ".join([d["text"].strip() for d in res])
+            res = search_reranker(user_question, TOP_VECTORS, TOP_RERANKER_VECTORS, tags=tags)
+            documents = " ".join([d["text"].strip() for d in res])
 
             content = RAG_PROMPT.format(user_question=user_question, documents=documents)
 
             # Prepare the context dataframe equivalent for the frontend
             # We send this as the FIRST chunk so the UI updates the table immediately
-            context_df = res.to_pandas().drop(columns=['source', 'vector'])
+            #context_df = res.to_pandas().drop(columns=['source', 'vector'])
 
             # Prepare the context dataframe equivalent for the frontend
             # We send this as the FIRST chunk so the UI updates the table immediately with Rerank            
-            #context_df = pd.DataFrame(res).drop(columns=['source', 'vector'], errors='ignore')
+            context_df = pd.DataFrame(res).drop(columns=['source', 'vector'], errors='ignore')
 
             # Convert any ndarray columns to lists for JSON serialization
             for col in context_df.columns:
