@@ -121,6 +121,7 @@ def split_doc_by_chunks(bucket_name: str, object_key: str) -> list:
         logger.warning(f"No content recovered for '{sanitized_key}'. Returning empty splits.")
         return []
 
+    # Tokenize the documents
     doc_splits = text_splitter.split_documents(docs)
 
     # Inject tags into every chunk metadata

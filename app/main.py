@@ -1,15 +1,17 @@
 import logging
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi import Depends
 from contextlib import asynccontextmanager
 
-from app.routers.auth import lifespan_auth
+from app.routers.auth import lifespan_auth, User, current_active_user
 from app.routers.llm import lifespan_llm
 from app.routers.ollama import lifespan_ollama
-from app.routers import auth, collection, file, chat, llm, ollama, huggingface, docker, setting
+from app.routers import auth, collection, file, chat, llm, ollama, huggingface, docker, setting, websocket
+from app.utils.websocket_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +98,27 @@ app.include_router(ollama.router)
 app.include_router(huggingface.router)
 app.include_router(docker.router)
 app.include_router(setting.router)
+app.include_router(websocket.router)
 
 @app.get("/health", tags=["system"], summary="Health Check")
 async def health_check():
+    return {"status": "ok"}
+
+@app.get("/ws", tags=["system"], summary="Websocket Check")
+async def websocket_check(
+    text: str = Query(None, description="Websocket Text Test"),
+    current_active_user: User = Depends(current_active_user)
+):    
+    await ws_manager.send_to_user(
+        current_active_user.id, 
+        {
+            "event": "ws.test",
+            "from_id": str(current_active_user.id),
+            "text": text,
+            "status": "ready"
+        }
+    )
+
     return {"status": "ok"}
 
 if __name__ == "__main__":

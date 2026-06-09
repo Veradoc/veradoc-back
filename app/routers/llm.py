@@ -13,6 +13,7 @@ from app.config import settings
 from app.utils.const import *
 from app.utils.doc_process_util import split_doc_by_chunks
 from app.utils.vector_util import get_embedding, get_or_create_table
+from app.utils.websocket_manager import ws_manager
 from app.routers.auth import engine, Base
 
 logger = logging.getLogger(__name__)
@@ -114,52 +115,6 @@ async def receive_metadata_webhook(request: Request, background_tasks: Backgroun
         background_tasks.add_task(delete_metadata_task, json_data)
 
     return {"status": "success"}
-
-def create_metadata_task(json_data):
-    for record in json_data["Records"]:
-        bucket_name = record["s3"]["bucket"]["name"]
-        object_key = urllib.parse.unquote(record["s3"]["object"]["key"])
-
-        print(bucket_name, object_key)
-
-        try:
-            # 1. Get the object from S3
-            response = s3.get_object(Bucket=bucket_name, Key=object_key)
-
-            # 2. Read the body stream and decode it
-            # 'Body' is a StreamingBody object, .read() gets the bytes
-            data = response['Body'].read().decode('utf-8')
-
-            # 3. Parse JSON
-            chunk_json = json.loads(data)
-
-            # 4. Process Embeddings
-            text_to_embed = f"{EMBEDDING_DOCUMENT_PREFIX}: {chunk_json['page_content']}"
-            embeddings = get_embedding(text_to_embed)
-
-            # 5. Add to Queue
-            add_data_queue.put({
-                "text": chunk_json["page_content"],
-                "parent_source": chunk_json.get("metadata", {}).get("source", ""),
-                "source": f"{bucket_name}/{object_key}",
-                "vector": embeddings,
-                "tags": list(chunk_json.get("metadata", {}).get("tags", []))          
-            })
-
-        except s3.exceptions.NoSuchKey:
-            print(f"Error: The object {object_key} does not exist.")
-        except Exception as e:
-            print(f"Error processing {object_key}: {e}")
-
-    return "Task Completed!"
-
-def delete_metadata_task(json_data):
-    for record in json_data["Records"]:
-        bucket_name = record["s3"]["bucket"]["name"]
-        object_key = urllib.parse.unquote(record["s3"]["object"]["key"])
-        delete_data_queue.put(f"{bucket_name}/{object_key}")
-
-    return "Task completed!"
 
 def create_object_task(json_data):
     for record in json_data["Records"]:
@@ -275,6 +230,64 @@ def delete_object_task(json_data) -> str:
 
     if errors_found:
         return f"Task completed with {len(errors_found)} error(s):\n" + "\n".join(errors_found)
+
+    return "Task completed!"
+
+def create_metadata_task(json_data):
+    for record in json_data["Records"]:
+        bucket_name = record["s3"]["bucket"]["name"]
+        object_key = urllib.parse.unquote(record["s3"]["object"]["key"])
+
+        print(bucket_name, object_key)
+
+        try:
+            # 1. Get the object from S3
+            response = s3.get_object(Bucket=bucket_name, Key=object_key)
+
+            # 2. Read the body stream and decode it
+            # 'Body' is a StreamingBody object, .read() gets the bytes
+            data = response['Body'].read().decode('utf-8')
+
+            # 3. Parse JSON
+            chunk_json = json.loads(data)
+
+            # 4. Process Embeddings
+            text_to_embed = f"{EMBEDDING_DOCUMENT_PREFIX}: {chunk_json['page_content']}"
+            embeddings = get_embedding(text_to_embed)
+
+            # 5. Add to Queue
+            add_data_queue.put({
+                "text": chunk_json["page_content"],
+                "parent_source": chunk_json.get("metadata", {}).get("source", ""),
+                "source": f"{bucket_name}/{object_key}",
+                "vector": embeddings,
+                "tags": list(chunk_json.get("metadata", {}).get("tags", []))          
+            })
+
+        except s3.exceptions.NoSuchKey:
+            print(f"Error: The object {object_key} does not exist.")
+        except Exception as e:
+            print(f"Error processing {object_key}: {e}")
+
+    # send websocket event when save embbedings
+    #ws_manager.send_to_user(
+    #    user_id,
+    #    {
+    #        "event": "doc.ingested",
+    #        "doc_id": object_key,
+    #        "filename": f"{bucket_name}/{object_key}",
+    #        "chunks": len(chunks),
+    #        "status": "ready"
+    #    }
+    #)
+        
+    return "Task Completed!"
+
+def delete_metadata_task(json_data):
+    for record in json_data["Records"]:
+        bucket_name = record["s3"]["bucket"]["name"]
+        object_key = urllib.parse.unquote(record["s3"]["object"]["key"])
+        delete_data_queue.put(f"{bucket_name}/{object_key}")
 
     return "Task completed!"
 
