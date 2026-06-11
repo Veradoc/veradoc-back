@@ -70,16 +70,10 @@ async def main_lifespan(app: FastAPI):
 app = FastAPI(lifespan=main_lifespan)
 
 # 2. Add CORS configuration
-origins = [
-    "http://localhost:4200",
-    "http://127.0.0.1:4200",
-    "http://veradoc-ui:4200",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Allows your Angular app
-    allow_credentials=True, # Required if you send cookies/auth headers
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],    # Allows POST, GET, OPTIONS, etc.
     allow_headers=["*"],    # Allows Content-Type, Authorization, etc.
     expose_headers=["Content-Disposition", "Content-Length"]
