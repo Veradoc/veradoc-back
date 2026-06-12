@@ -1,7 +1,6 @@
 from fastapi import WebSocket
 from typing import DefaultDict
 from collections import defaultdict
-import asyncio, json
 
 class WebSocketManager:
     def __init__(self):

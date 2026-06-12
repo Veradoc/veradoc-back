@@ -251,6 +251,8 @@ def create_metadata_task(json_data):
             # 3. Parse JSON
             chunk_json = json.loads(data)
 
+            print(chunk_json)
+
             # 4. Process Embeddings
             text_to_embed = f"{EMBEDDING_DOCUMENT_PREFIX}: {chunk_json['page_content']}"
             embeddings = get_embedding(text_to_embed)
@@ -269,17 +271,27 @@ def create_metadata_task(json_data):
         except Exception as e:
             print(f"Error processing {object_key}: {e}")
 
-    # send websocket event when save embbedings
-    #ws_manager.send_to_user(
-    #    user_id,
-    #    {
-    #        "event": "doc.ingested",
-    #        "doc_id": object_key,
-    #        "filename": f"{bucket_name}/{object_key}",
-    #        "chunks": len(chunks),
-    #        "status": "ready"
-    #    }
-    #)
+    # 6. Get tags for this object
+    tagging_response = s3.get_object_tagging(Bucket=bucket_name, Key=object_key)
+
+    # 7. Extract owner_id from TagSet
+    tag_set = tagging_response.get('TagSet', [])
+    owner_id = next(
+        (tag['Value'] for tag in tag_set if tag['Key'] == 'owner_id'),
+        None  # default if tag not found
+    )
+
+    # 8. send websocket event when save embbedings
+    ws_manager.send_to_user(
+        owner_id,
+        {
+            "event": "doc.ingested",
+            "doc_id": object_key,
+            "filename": f"{bucket_name}/{object_key}",
+            #"chunks": len(chunks),
+            "status": "ready"
+        }
+    )
         
     return "Task Completed!"
 

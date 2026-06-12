@@ -24,6 +24,7 @@ class DocsModel(LanceModel):
     source: str
     text: str
     tags: list[str]
+    user_id: str
     vector: Vector(EMBEDDINGS_DIM, pa.float16()) # type: ignore
 
 _reranker_model: CrossEncoder | None = None

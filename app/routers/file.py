@@ -121,9 +121,16 @@ async def upload_files(
 
     # Parse tags once, shared across all files
     parsed_tags = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
-    tagging = {
-        "TagSet": [{"Key": tag, "Value": "1"} for tag in parsed_tags]
-    } if parsed_tags else None
+
+    # Build TagSet — user tags + owner metadata
+    tag_set = [{"Key": tag, "Value": "1"} for tag in parsed_tags]
+    tag_set.append({"Key": "owner_id", "Value": str(current_active_user.id)})
+
+    tagging = {"TagSet": tag_set}
+
+    #tagging = {
+    #    "TagSet": [{"Key": tag, "Value": "1"} for tag in parsed_tags]
+    #} if parsed_tags else None
 
     for file in files:
         try:                
