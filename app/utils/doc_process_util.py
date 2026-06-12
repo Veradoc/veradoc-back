@@ -56,9 +56,15 @@ def _download_from_s3(bucket_name: str, object_key: str) -> tuple[str, list[str]
         s3.download_file(bucket_name, object_key, local_path)
 
         tag_response = s3.get_object_tagging(Bucket=bucket_name, Key=object_key)
-        tags = [t["Key"] for t in tag_response.get("TagSet", [])]
 
-        return local_path, tags
+        tag_set = tag_response.get("TagSet", [])
+        tags = [t["Value"] for t in tag_set if t["Key"] != "owner_id"]
+        owner_id = next(
+            (t["Value"] for t in tag_set if t["Key"] == "owner_id"),
+        None
+)
+
+        return local_path, tags, owner_id
     except Exception as e:
         if os.path.exists(local_path):
             os.remove(local_path)
@@ -84,7 +90,7 @@ def split_doc_by_chunks(bucket_name: str, object_key: str) -> list:
     local_file = None
 
     try:
-        local_file, tags = _download_from_s3(bucket_name, sanitized_key)
+        local_file, tags, owner_id = _download_from_s3(bucket_name, sanitized_key)
 
         if ext in [".png", ".jpg", ".jpeg"]:
             text = _ocr_image(local_file)
@@ -124,8 +130,9 @@ def split_doc_by_chunks(bucket_name: str, object_key: str) -> list:
     # Tokenize the documents
     doc_splits = text_splitter.split_documents(docs)
 
-    # Inject tags into every chunk metadata
+    # Inject tags and owner_id into every chunk metadata
     for chunk in doc_splits:
         chunk.metadata["tags"] = list(tags)
+        chunk.metadata["owner_id"] = owner_id
 
     return doc_splits

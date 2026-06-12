@@ -22,9 +22,9 @@ table = None
 class DocsModel(LanceModel):
     parent_source: str
     source: str
-    text: str
+    text: str    
     tags: list[str]
-    user_id: str
+    owner_id: str
     vector: Vector(EMBEDDINGS_DIM, pa.float16()) # type: ignore
 
 _reranker_model: CrossEncoder | None = None

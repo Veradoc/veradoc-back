@@ -1,5 +1,7 @@
 import logging
 import json
+import uuid
+import asyncio
 import multiprocessing
 import urllib.parse
 import pandas as pd
@@ -14,6 +16,7 @@ from app.utils.const import *
 from app.utils.doc_process_util import split_doc_by_chunks
 from app.utils.vector_util import get_embedding, get_or_create_table
 from app.utils.websocket_manager import ws_manager
+from app.utils.loop import get_loop
 from app.routers.auth import engine, Base
 
 logger = logging.getLogger(__name__)
@@ -41,10 +44,34 @@ def add_vector_job():
         data.append(item)
 
     if len(data) > 0:
+        print("Data trace")
+        print(data)
+
         df = pd.DataFrame(data)
         table.add(df)
         table.compact_files()
+
         print(f"Total Rows Added: {len(table.to_pandas())}")
+
+        # Send websocket messages per token
+        for token in data:
+            print(f"Send token from owner_id: {token['owner_id']}")
+
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    ws_manager.send_to_user(
+                        token['owner_id'],
+                        {
+                            "event": "doc.progress",
+                            "text": token['text'],
+                            "source": token['source'],
+                            "status": "ready"
+                        }
+                    ),
+                    get_loop()  # ← use stored FastAPI loop
+                ).result(timeout=5)
+            except Exception as e:
+                print(f"WebSocket send error: {e}")
 
 def delete_vector_job():
     table = get_or_create_table()
@@ -263,35 +290,14 @@ def create_metadata_task(json_data):
                 "parent_source": chunk_json.get("metadata", {}).get("source", ""),
                 "source": f"{bucket_name}/{object_key}",
                 "vector": embeddings,
-                "tags": list(chunk_json.get("metadata", {}).get("tags", []))          
+                "tags": list(chunk_json.get("metadata", {}).get("tags", [])),          
+                "owner_id": chunk_json.get("metadata", {}).get("owner_id", None)
             })
 
         except s3.exceptions.NoSuchKey:
             print(f"Error: The object {object_key} does not exist.")
         except Exception as e:
             print(f"Error processing {object_key}: {e}")
-
-    # 6. Get tags for this object
-    tagging_response = s3.get_object_tagging(Bucket=bucket_name, Key=object_key)
-
-    # 7. Extract owner_id from TagSet
-    tag_set = tagging_response.get('TagSet', [])
-    owner_id = next(
-        (tag['Value'] for tag in tag_set if tag['Key'] == 'owner_id'),
-        None  # default if tag not found
-    )
-
-    # 8. send websocket event when save embbedings
-    ws_manager.send_to_user(
-        owner_id,
-        {
-            "event": "doc.ingested",
-            "doc_id": object_key,
-            "filename": f"{bucket_name}/{object_key}",
-            #"chunks": len(chunks),
-            "status": "ready"
-        }
-    )
         
     return "Task Completed!"
 

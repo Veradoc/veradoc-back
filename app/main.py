@@ -1,4 +1,5 @@
 import logging
+import asyncio
 
 import uvicorn
 from fastapi import FastAPI, Query
@@ -12,8 +13,11 @@ from app.routers.llm import lifespan_llm
 from app.routers.ollama import lifespan_ollama
 from app.routers import auth, collection, file, chat, llm, ollama, huggingface, docker, setting, websocket
 from app.utils.websocket_manager import ws_manager
+from app.utils.loop import set_loop
 
 logger = logging.getLogger(__name__)
+
+app_event_loop: asyncio.AbstractEventLoop = None
 
 def conf_openapi():
     if app.openapi_schema:
@@ -62,6 +66,8 @@ def conf_openapi():
 # 1. Initialize FastAPI App with Auth and LLM Management configuration
 @asynccontextmanager
 async def main_lifespan(app: FastAPI):
+    set_loop(asyncio.get_event_loop())
+    
     async with lifespan_auth(app):
         async with lifespan_llm(app):
             async with lifespan_ollama(app):
