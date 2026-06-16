@@ -24,7 +24,7 @@ os.environ["ALLOW_HTTP"] = "True"
 DOCS_TABLE = "docs"
 EMBEDDINGS_DIM = 1024
 METADATA_PREFIX = "metadata"
-EMBEDDING_DOCUMENT_PREFIX = "search_document"
+#EMBEDDING_DOCUMENT_PREFIX = "search_document"
 EMBEDDING_QUERY_PREFIX = "query"
 BUCKET_NAME = "custom-corpus"
 

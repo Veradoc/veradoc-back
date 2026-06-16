@@ -103,7 +103,9 @@ def search(query, top_vectors, tags: list[str] = None):
     return search_query.limit(top_vectors)
 
 def search_reranker(query, top_vectors, top_reranker_vectors, tags: list[str] = None):
-    query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
+    TASK_DESCRIPTION = "Given a question, retrieve relevant passages that answer the question"
+    query_embedding = get_embedding(f"Instruct: {TASK_DESCRIPTION}\nQuery: {query}")
+    #query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
     search_query = get_or_create_table().search(query_embedding).metric("cosine")
 
     if tags:

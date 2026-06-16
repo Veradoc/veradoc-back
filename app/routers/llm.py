@@ -281,8 +281,9 @@ def create_metadata_task(json_data):
             print(chunk_json)
 
             # 4. Process Embeddings
-            text_to_embed = f"{EMBEDDING_DOCUMENT_PREFIX}: {chunk_json['page_content']}"
-            embeddings = get_embedding(text_to_embed)
+            #text_to_embed = f"{EMBEDDING_DOCUMENT_PREFIX}: {chunk_json['page_content']}"
+            #embeddings = get_embedding(text_to_embed)
+            embeddings = get_embedding(chunk_json['page_content'])
 
             # 5. Add to Queue
             add_data_queue.put({
