@@ -99,8 +99,7 @@ async def model_mapper(
 
     return model
 
-@router.get(
-    "/models/ollama",
+@router.get("/models/ollama",
     summary="List all Ollama Models pulled",
     description="""
     Retrieves a list of AI models currently pulled on the local Ollama server. Useful for monitoring resource usage.
@@ -223,8 +222,7 @@ async def pull_model(
 
     return StreamingResponse(generate_logs(), media_type="text/plain")
 
-@router.post(
-    "/models/ollama/start/{model_name:path}",
+@router.post("/models/ollama/start/{model_name:path}",
     summary="Deploy/Start Model",
     description="""
     Initiates the loading (or downloading) of a specific model into the Ollama engine. 
@@ -304,8 +302,7 @@ async def start_model(
 
     return StreamingResponse(generate_logs(), media_type="text/plain")
 
-@router.post(
-    "/models/ollama/stop/{model_name:path}",
+@router.post("/models/ollama/stop/{model_name:path}",
     summary="Unload/Stop Model",
     description="""
     Forces the Ollama server to **unload a model from VRAM**. 

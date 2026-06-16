@@ -62,8 +62,7 @@ def get_author(author: str) -> str:
         return "", None
         
 # --- HuggingFace API ---
-@router.get(
-    "/huggingface",
+@router.get("/huggingface",
     summary="Search HuggingFace Hub models",
     description="""
     Queries the HuggingFace Model Hub for available models. 

@@ -129,3 +129,24 @@ async def get_setting_by_key(
         key=setting.key,
         value=setting.value
     )
+
+@router.get("", 
+    summary="Get all settings",
+    description="""
+    Get all settings.
+    """,
+    response_description="A list of settings.",
+    response_model=list[SettingValueResponse])
+async def get_all_settings(
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    Retrieve all settings.
+    """
+    # 1. Query the database for the matching key row
+    query = select(Setting)
+    result = await session.execute(query)
+    settings = result.scalars().all()
+
+    # 3. Return the key and its value matching our Pydantic schema
+    return settings 

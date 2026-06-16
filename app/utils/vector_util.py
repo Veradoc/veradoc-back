@@ -93,7 +93,6 @@ def get_embedding(text):
 
 def search(query, top_vectors, tags: list[str] = None):
     query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
-
     search_query = get_or_create_table().search(query_embedding).metric("cosine")
 
     if tags:
@@ -130,4 +129,5 @@ def search_reranker(query, top_vectors, top_reranker_vectors, tags: list[str] = 
 
     except Exception as e:
         print(f"[reranker] CrossEncoder failed, falling back to LanceDB order: {e}")
+
         return candidates[:top_vectors]

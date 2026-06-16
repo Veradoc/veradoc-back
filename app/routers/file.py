@@ -27,8 +27,7 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-@router.get(
-    "/files",
+@router.get("/files",
     summary="List MinIO Bucket Contents",
     description="""
     Retrieves a detailed list of objects stored within a specific MinIO bucket. 
