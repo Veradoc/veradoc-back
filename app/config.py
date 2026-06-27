@@ -15,8 +15,10 @@ class Settings(BaseSettings):
     minio_knowledge_base_metadata: str = "metadata"
     minio_knowledge_vectordb: str = "warehouse"
     minio_knowledge_vectordb_table: str = "docs"
+    # embedding model configurations
     top_k_chunks: int | None = None
     top_rerank_chunks: int | None = None
+    # infrastructure configurations
     gpu_options: dict | None = None
     num_threads: int | None = None
 
