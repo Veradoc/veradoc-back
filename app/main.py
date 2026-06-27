@@ -1,12 +1,12 @@
 import logging
 import asyncio
-
 import uvicorn
+
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi import Depends
-from contextlib import asynccontextmanager
 
 from app.routers.auth import lifespan_auth, User, current_active_user
 from app.routers.llm import lifespan_llm
@@ -16,8 +16,6 @@ from app.utils.websocket_manager import ws_manager
 from app.utils.loop import set_loop
 
 logger = logging.getLogger(__name__)
-
-app_event_loop: asyncio.AbstractEventLoop = None
 
 def conf_openapi():
     if app.openapi_schema:
@@ -63,7 +61,7 @@ def conf_openapi():
 
     return app.openapi_schema
 
-# 1. Initialize FastAPI App with Auth and LLM Management configuration
+# 1. Initialize FastAPI App from Auth, LLM and Ollama Configurations
 @asynccontextmanager
 async def main_lifespan(app: FastAPI):
     set_loop(asyncio.get_event_loop())
@@ -100,13 +98,14 @@ app.include_router(docker.router)
 app.include_router(setting.router)
 app.include_router(websocket.router)
 
+# 5. Check endpoints
 @app.get("/health", tags=["system"], summary="Health Check")
 async def health_check():
     return {"status": "ok"}
 
 @app.get("/ws", tags=["system"], summary="Websocket Check")
 async def websocket_check(
-    text: str = Query(None, description="Websocket Text Test"),
+    text: str = Query(None, description="Websocket Test Text"),
     current_active_user: User = Depends(current_active_user)
 ):    
     await ws_manager.send_to_user(

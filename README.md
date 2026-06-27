@@ -270,8 +270,6 @@ curl -X 'POST' \
 
 - [APScheduler](https://apscheduler.readthedocs.io/en/3.x/): Advanced Python Scheduler
 
-- [s3fs](https://github.com/fsspec/s3fs/): S3FS builds on aiobotocore to provide a convenient Python filesystem interface for S3.
-
 - [FastAPI](https://fastapi.tiangolo.com/): FastAPI framework, high performance, easy to learn, fast to code, ready for production
 
 - [FastAPI-Users](https://fastapi-users.github.io/fastapi-users/latest/): Ready-to-use and customizable users management for FastAPI
@@ -279,6 +277,10 @@ curl -X 'POST' \
 - [Uvicorn](https://uvicorn.dev/): Uvicorn is an ASGI web server implementation for Python
 
 - [Minio-RAG](https://github.com/dilverse/rag-with-minio): core sample Minio + RAG + Gradio
+
+## Configuration
+
+- DEF_TOP_RERANKER_VECTORS (20): number of embeddings
 
 ## Dependencies
 To see all dependencies like a tree execute this command:

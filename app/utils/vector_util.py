@@ -45,14 +45,15 @@ def get_reranker() -> CrossEncoder:
             if _reranker_model is None:
                 device = _get_best_device()
                 
-                print(f"[reranker] Loading {RERANKER_MODEL} on {device}...")
+                print(f"[reranker] Loading {DEF_RERANKER_MODEL} on {device}...")
 
                 _reranker_model = CrossEncoder(
-                    RERANKER_MODEL,
-                    device=device,
+                    DEF_RERANKER_MODEL,
+                    device=device,                    
                     trust_remote_code=True)
                 
-                print(f"[reranker] Model ready on {device}")                
+                print(f"[reranker] Model ready on {device}")
+                
     return _reranker_model
 
 def get_db():
@@ -63,9 +64,6 @@ def get_db():
             "s3://warehouse/v-db/",
             read_consistency_interval=timedelta(seconds=5)
         )
-
-    #db.drop_table("docs")  # replace with your DOCS_TABLE value
-    #print("Table dropped.")
 
 def get_or_create_table():
     global table
@@ -84,7 +82,7 @@ def get_embedding(text):
     resp = requests.post(
         settings.ollama_host + "/api/embeddings",
         json={
-            "model": EMBEDDING_MODEL,
+            "model": DEF_EMBEDDING_MODEL,
             "prompt": text
         }
     )
@@ -92,7 +90,9 @@ def get_embedding(text):
     return np.array(resp.json()["embedding"][:EMBEDDINGS_DIM], dtype=np.float16)
 
 def search(query, top_vectors, tags: list[str] = None):
-    query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
+    TASK_DESCRIPTION = "Given a query, retrieve relevant passages that answer the question"
+    query_embedding = get_embedding(f"Instruct: {TASK_DESCRIPTION}\nQuery: {query}")
+
     search_query = get_or_create_table().search(query_embedding).metric("cosine")
 
     if tags:
@@ -102,18 +102,18 @@ def search(query, top_vectors, tags: list[str] = None):
 
     return search_query.limit(top_vectors)
 
-def search_reranker(query, top_vectors, top_reranker_vectors, tags: list[str] = None):
-    TASK_DESCRIPTION = "Given a question, retrieve relevant passages that answer the question"
+def search_reranker(query, top_vectors, top_reranker_chunks, tags: list[str] = None):
+    TASK_DESCRIPTION = "Given a query, retrieve relevant passages that answer the question"
     query_embedding = get_embedding(f"Instruct: {TASK_DESCRIPTION}\nQuery: {query}")
-    #query_embedding = get_embedding(f"{EMBEDDING_QUERY_PREFIX}: {query}")
-    search_query = get_or_create_table().search(query_embedding).metric("cosine")
+
+    search_chunks = get_or_create_table().search(query_embedding).metric("cosine")
 
     if tags:
         # LanceDB SQL filter: check each tag is present in the array column
         tag_conditions = " AND ".join(f"array_has(tags, '{tag}')" for tag in tags)
-        search_query = search_query.where(tag_conditions)
+        search_chunks = search_chunks.where(tag_conditions)
 
-    candidates = search_query.limit(top_reranker_vectors).to_list()
+    candidates = search_chunks.limit(top_reranker_chunks).to_list()
 
     if not candidates:
         return []
@@ -127,7 +127,7 @@ def search_reranker(query, top_vectors, top_reranker_vectors, tags: list[str] = 
         for doc, score in zip(candidates, scores):
             doc["rerank_score"] = float(score)
 
-        return sorted(candidates, key=lambda d: d["rerank_score"], reverse=True)[:top_vectors]
+        return sorted(candidates, key=lambda d: d["rerank_score"], reverse=True)[:settings.top_k_chunks]
 
     except Exception as e:
         print(f"[reranker] CrossEncoder failed, falling back to LanceDB order: {e}")

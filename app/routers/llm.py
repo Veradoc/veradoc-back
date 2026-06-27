@@ -1,6 +1,5 @@
 import logging
 import json
-import uuid
 import asyncio
 import multiprocessing
 import urllib.parse
@@ -87,7 +86,6 @@ def delete_vector_job():
         print(f"Total Rows Deleted: {len(table.to_pandas())}")
 
 scheduler = BackgroundScheduler()
-
 scheduler.add_job(add_vector_job, 'interval', seconds=10)
 scheduler.add_job(delete_vector_job, 'interval', seconds=10)
 
@@ -99,8 +97,10 @@ async def lifespan_llm(app: FastAPI):
 
     # --- APP STARTUP ---
     get_or_create_table()
+
     if not scheduler.running:
         scheduler.start()
+
     yield
 
     # --- SHUTDOWN ---
@@ -281,9 +281,8 @@ def create_metadata_task(json_data):
             print(chunk_json)
 
             # 4. Process Embeddings
-            #text_to_embed = f"{EMBEDDING_DOCUMENT_PREFIX}: {chunk_json['page_content']}"
-            #embeddings = get_embedding(text_to_embed)
-            embeddings = get_embedding(chunk_json['page_content'])
+            text_to_embed = chunk_json['page_content']            
+            embeddings = get_embedding(text_to_embed)
 
             # 5. Add to Queue
             add_data_queue.put({

@@ -24,8 +24,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1024,
-    chunk_overlap=64,
+    chunk_size=2500,
+    chunk_overlap=400,
     length_function=len
 )
 
@@ -127,7 +127,7 @@ def split_doc_by_chunks(bucket_name: str, object_key: str) -> list:
         logger.warning(f"No content recovered for '{sanitized_key}'. Returning empty splits.")
         return []
 
-    # Tokenize the documents
+    # Chunking the documents
     doc_splits = text_splitter.split_documents(docs)
 
     # Inject tags and owner_id into every chunk metadata

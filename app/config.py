@@ -1,17 +1,26 @@
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Determine which file to load (default to .env if nothing is set)
+# Determine which context file to load (default to .env if nothing is set)
 env_suffix = os.getenv("APP_ENV", "")
 env_file = f".env.{env_suffix}" if env_suffix else ".env"
 
-class Settings(BaseSettings):
-    # These will look for environment variables of the same name (case-insensitive)
+# These will look for environment variables of the same name (case-insensitive)
+class Settings(BaseSettings):    
+    # minio configurations
     minio_endpoint: str
     minio_access_key: str
     minio_secret_key: str
     minio_knowledge_base: str = "custom-corpus"
-    minio_knowledge_metadata: str = "warehouse"
+    minio_knowledge_base_metadata: str = "metadata"
+    minio_knowledge_vectordb: str = "warehouse"
+    minio_knowledge_vectordb_table: str = "docs"
+    top_k_chunks: int | None = None
+    top_rerank_chunks: int | None = None
+    gpu_options: dict | None = None
+    num_threads: int | None = None
+
+    # ollama configurations
     ollama_host: str = "http://localhost:11434"
     
     # This tells Pydantic to read from a .env file

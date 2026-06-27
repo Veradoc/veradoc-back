@@ -9,13 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ollama import AsyncClient
 
-from app.utils.const import LLM_MODEL, DEF_TOP_VECTORS, DEF_TOP_RERANKER_VECTORS
+from app.utils.const import DEF_LLM_MODEL, DEF_TOP_VECTORS, DEF_TOP_RERANKER_VECTORS
 from app.config import settings
 from app.routers.auth import current_active_superuser, current_active_user, async_session_maker, get_async_session
 from app.routers.huggingface import get_hf_model_info
 from app.routers.chat import set_active_model, set_top_vectors, set_top_rerankers_vectors
 from app.routers.setting import SettingUpdatePayload, get_setting_by_key, save_key
 from app.models.model import Model
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +43,13 @@ async def lifespan_ollama(app: FastAPI):
                 set_active_model(llm_model_setting.value)
                 print(f"[LIFESPAN] Successfully restored active llm model: {llm_model_setting.value}")
             else:
-                set_active_model(LLM_MODEL)
+                set_active_model(DEF_LLM_MODEL)
                 print("[LIFESPAN] No llm model configuration found. Using default preset.")
 
-            if top_vectors_setting and top_vectors_setting.value:                
+            if settings.top_k_chunks:
+                set_top_vectors(settings.top_k_chunks)
+                print(f"[LIFESPAN] Successfully recovery top vectors: {settings.top_k_chunks}")
+            elif top_vectors_setting and top_vectors_setting.value:                
                 set_top_vectors(top_vectors_setting.value)
                 print(f"[LIFESPAN] Successfully recovery top vectors: {top_vectors_setting.value}")
             else:
@@ -59,7 +64,7 @@ async def lifespan_ollama(app: FastAPI):
                 print("[LIFESPAN] No model configuration found. Using default preset.")
 
         except Exception as e:
-            set_active_model(LLM_MODEL)
+            set_active_model(DEF_LLM_MODEL)
             set_top_vectors(DEF_TOP_VECTORS)
             set_top_rerankers_vectors(DEF_TOP_RERANKER_VECTORS)
 

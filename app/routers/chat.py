@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 import uuid
 import boto3
-import pynvml
+
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,13 +12,13 @@ from sqlalchemy import desc, select, func
 from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import StreamingResponse
 
+from app.routers.auth import User, current_active_user, get_async_session
 from app.utils.const import *
 from app.utils.vector_util import search, search_reranker
-from app.config import settings
-from app.routers.auth import User, current_active_user, get_async_session
-
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.config import settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -38,43 +38,28 @@ router = APIRouter(
 )
 
 def set_active_model(model_name: str):
-    global LLM_MODEL
+    global DEF_LLM_MODEL
 
-    LLM_MODEL = model_name
-    print(f"[STATE] In-memory model successfully updated to: {LLM_MODEL}")
+    DEF_LLM_MODEL = model_name
+    print(f"[STATE] In-memory model successfully updated to: {DEF_LLM_MODEL}")
 
 def set_top_vectors(top_vectors: str):
-    global TOP_VECTORS
+    #global TOP_VECTORS
 
-    TOP_VECTORS = int(top_vectors)
-    print(f"[STATE] Top Vectors Embedded model configured for: {TOP_VECTORS}")
+    #TOP_VECTORS = int(top_vectors)
+    #print(f"[STATE] Top Vectors Embedded model configured for: {TOP_VECTORS}")
+
+    settings.top_k_chunks = int(top_vectors)
+    print(f"[STATE] Top Vectors Embedded model configured for: {settings.top_k_chunks}")
 
 def set_top_rerankers_vectors(top_reranker_vectors: str):
-    global TOP_RERANKER_VECTORS
+    #global TOP_RERANKER_VECTORS
 
-    TOP_RERANKER_VECTORS = int(top_reranker_vectors)
-    print(f"[STATE] Top Reranker Vectors Embedded model configured for: {TOP_RERANKER_VECTORS}")
+    #TOP_RERANKER_VECTORS = int(top_reranker_vectors)
+    #print(f"[STATE] Top Reranker Vectors Embedded model configured for: {TOP_RERANKER_VECTORS}")
 
-def get_model_gpu_options() -> dict:
-    try:        
-        pynvml.nvmlInit()
-
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        vram_mb = mem_info.total / 1024 / 1024
-
-        if vram_mb >= 8000:       # 8GB+ a full GPU, large context window (num_ctx  >  system_prompt + history + retrieved_chunks + question + expected_response)
-            return {"num_gpu": 99, "num_ctx": 32768}
-        elif vram_mb >= 6000:     # 6GB  a full GPU, moderate context window
-            return {"num_gpu": 99, "num_ctx": 16384}
-        elif vram_mb >= 4000:     # 4GB  a full GPU, safe context window
-            return {"num_gpu": 99, "num_ctx": 8192}
-        else:                     # CPU fallback
-            return {"num_gpu": 0, "num_ctx": 2048}
-    except Exception:
-        return {"num_gpu": 0, "num_ctx": 2048}
-
-gpu_options = get_model_gpu_options()
+    settings.top_rerank_chunks = int(top_reranker_vectors)
+    print(f"[STATE] Top Vectors Embedded model configured for: {settings.top_rerank_chunks}")    
 
 class EmbeddingRequest(BaseModel):
     prompt: str
@@ -154,10 +139,10 @@ async def chat_endpoint(
             #documents = " ".join([d["text"].strip() for d in res.to_list()])
 
             # Perform your search (RAG Logic) passing the top vectors to be recovered and optional tags with Rerank
-            res = search_reranker(user_question, TOP_VECTORS, TOP_RERANKER_VECTORS, tags=tags)
+            res = search_reranker(user_question, DEF_TOP_VECTORS, DEF_TOP_RERANKER_VECTORS, tags=tags)
             documents = " ".join([d["text"].strip() for d in res])
 
-            content = RAG_PROMPT.format(user_question=user_question, documents=documents)
+            content = RAG_USER_PROMPT.format(user_question=user_question, documents=documents)
 
             # Prepare the context dataframe equivalent for the frontend
             # We send this as the FIRST chunk so the UI updates the table immediately
@@ -186,11 +171,11 @@ async def chat_endpoint(
         # 5. Call the LLM with streaming
         # Use a context manager (with) to ensure the connection to the LLM is closed        
         full_ai_response = ""
-
+        
         with requests.post(
             settings.ollama_host + "/api/chat",
             json={
-                "model": LLM_MODEL,
+                "model": DEF_LLM_MODEL,
                 "messages": history_msgs + [
                     {
                         "role": "user",
@@ -200,9 +185,8 @@ async def chat_endpoint(
                 "options": {
                     "temperature": 0,
                     "top_p": 0.90,
-                    'num_thread': 4,  # limit CPU threads
-                    'num_ctx': 2048,  # reduce memory footprint                    
-                    #**gpu_options    # merges num_gpu and num_ctx                    
+                    'num_thread': settings.num_threads, # limit CPU threads                    
+                    **settings.gpu_options              # merges num_gpu and num_ctx                    
                 }
             },
             stream=True
