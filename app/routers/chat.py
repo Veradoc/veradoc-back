@@ -44,20 +44,10 @@ def set_active_model(model_name: str):
     print(f"[STATE] In-memory model successfully updated to: {DEF_LLM_MODEL}")
 
 def set_top_vectors(top_vectors: str):
-    #global TOP_VECTORS
-
-    #TOP_VECTORS = int(top_vectors)
-    #print(f"[STATE] Top Vectors Embedded model configured for: {TOP_VECTORS}")
-
     settings.top_k_chunks = int(top_vectors)
     print(f"[STATE] Top Vectors Embedded model configured for: {settings.top_k_chunks}")
 
 def set_top_rerankers_vectors(top_reranker_vectors: str):
-    #global TOP_RERANKER_VECTORS
-
-    #TOP_RERANKER_VECTORS = int(top_reranker_vectors)
-    #print(f"[STATE] Top Reranker Vectors Embedded model configured for: {TOP_RERANKER_VECTORS}")
-
     settings.top_rerank_chunks = int(top_reranker_vectors)
     print(f"[STATE] Top Vectors Embedded model configured for: {settings.top_rerank_chunks}")    
 

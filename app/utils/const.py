@@ -9,7 +9,7 @@ DEF_LLM_MODEL = "hf.co/unsloth/Llama-3.2-3B-Instruct-GGUF:latest"         # Gene
 DEF_EMBEDDING_MODEL = "hf.co/Ralriki/multilingual-e5-large-instruct-GGUF" # Embedding model
 DEF_RERANKER_MODEL = "jinaai/jina-reranker-v2-base-multilingual"          # CrossEncoder model
 DEF_TOP_RERANKER_VECTORS = 20
-DEF_TOP_VECTORS = 5
+DEF_TOP_VECTORS = 2
 
 # Google configurations
 GOOGLE_CLIENT_ID = "203872501539-5utooc4ptpso11301ruqllthq17nb3kb.apps.googleusercontent.com"

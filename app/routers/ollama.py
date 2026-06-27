@@ -46,12 +46,12 @@ async def lifespan_ollama(app: FastAPI):
                 set_active_model(DEF_LLM_MODEL)
                 print("[LIFESPAN] No llm model configuration found. Using default preset.")
 
-            if settings.top_k_chunks:
-                set_top_vectors(settings.top_k_chunks)
-                print(f"[LIFESPAN] Successfully recovery top vectors: {settings.top_k_chunks}")
-            elif top_vectors_setting and top_vectors_setting.value:                
+            if top_vectors_setting and top_vectors_setting.value:
                 set_top_vectors(top_vectors_setting.value)
                 print(f"[LIFESPAN] Successfully recovery top vectors: {top_vectors_setting.value}")
+            elif settings.top_k_chunks:
+                set_top_vectors(settings.top_k_chunks)
+                print(f"[LIFESPAN] Successfully recovery top vectors: {settings.top_k_chunks}")                           
             else:
                 set_top_vectors(DEF_TOP_VECTORS)
                 print("[LIFESPAN] No model configuration found. Using default preset.")

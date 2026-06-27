@@ -30,7 +30,7 @@ class SettingResponse(BaseModel):
 
 class SettingValueResponse(BaseModel):
     key: str
-    value: str  # If you use JSON columns later, change this type to Any or dic
+    value: str | None = None # If you use JSON columns later, change this type to Any or dic
 
 class SettingUpdatePayload(BaseModel):
     value: str
