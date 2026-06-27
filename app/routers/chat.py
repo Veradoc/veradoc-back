@@ -73,7 +73,7 @@ def test_promt(
     if isinstance(tags, str):
         tags = [t.strip() for t in tags.split(",") if t.strip()]
     
-    res = search_reranker(payload.prompt, TOP_VECTORS, TOP_RERANKER_VECTORS, tags=tags)
+    res = search_reranker(payload.prompt, DEF_TOP_VECTORS, DEF_TOP_RERANKER_VECTORS, tags=tags)
     documents = " ".join([d["text"].strip() for d in res])
 
     return documents
