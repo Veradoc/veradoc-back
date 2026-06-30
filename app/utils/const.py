@@ -1,6 +1,7 @@
 import os
-import pynvml
 import psutil
+import platform
+import subprocess
 
 from app.config import settings
 
@@ -23,24 +24,78 @@ os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 os.environ["ALLOW_HTTP"] = "True"
 
 # LLM configurations from your computer hardware architecture
+def _options_from_vram(vram_mb: float) -> dict:
+    """Shared VRAM → options mapping for NVIDIA and AMD."""
+    if vram_mb >= 8000:
+        return {"num_gpu": 99, "num_ctx": 32768}
+    elif vram_mb >= 6000:
+        return {"num_gpu": 99, "num_ctx": 16384}
+    elif vram_mb >= 4000:
+        return {"num_gpu": 99, "num_ctx": 8192}
+    else:
+        return {"num_gpu": 0, "num_ctx": 2048}
+
+def _get_apple_silicon_options() -> dict:
+    """
+    On Apple Silicon, GPU and RAM are unified (UMA).
+    Detect total system RAM and use a portion for GPU inference.
+    Ollama on macOS uses Metal automatically — num_gpu=1 is enough.
+    """
+    try:
+        result = subprocess.run(
+            ["sysctl", "-n", "hw.memsize"],
+            capture_output=True, text=True, check=True
+        )
+        total_ram_mb = int(result.stdout.strip()) / 1024 / 1024
+
+        if total_ram_mb >= 32000:    # 32GB M1 Pro/Max/Ultra
+            return {"num_gpu": 1, "num_ctx": 32768}
+        elif total_ram_mb >= 16000:  # 16GB M1/M2 base
+            return {"num_gpu": 1, "num_ctx": 16384}
+        elif total_ram_mb >= 8000:   # 8GB M1 base
+            return {"num_gpu": 1, "num_ctx": 8192}
+        else:
+            return {"num_gpu": 1, "num_ctx": 4096}
+    except Exception:
+        # Apple Silicon always has Metal — safe to enable GPU with conservative ctx
+        return {"num_gpu": 1, "num_ctx": 8192}
+
 def get_model_gpu_options() -> dict:
-    try:        
+    system = platform.system()
+
+    # ── Apple Silicon (M1/M2/M3) ─────────────────────────────────────────────
+    if system == "Darwin":
+        return _get_apple_silicon_options()
+
+    # ── Linux / Windows — NVIDIA via pynvml ──────────────────────────────────
+    try:
+        import pynvml
         pynvml.nvmlInit()
 
         handle = pynvml.nvmlDeviceGetHandleByIndex(0)
         mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
         vram_mb = mem_info.total / 1024 / 1024
 
-        if vram_mb >= 8000:       # 8GB+ a full GPU, large context window (num_ctx  >  system_prompt + history + retrieved_chunks(vector database) + question(user promt) + expected_response)
-            return {"num_gpu": 99, "num_ctx": 32768}
-        elif vram_mb >= 6000:     # 6GB  a full GPU, moderate context window
-            return {"num_gpu": 99, "num_ctx": 16384}
-        elif vram_mb >= 4000:     # 4GB  a full GPU, safe context window
-            return {"num_gpu": 99, "num_ctx": 8192}
-        else:                     # CPU fallback
-            return {"num_gpu": 0, "num_ctx": 2048}
+        return _options_from_vram(vram_mb)
     except Exception:
-        return {"num_gpu": 0, "num_ctx": 2048}
+        pass
+
+    # ── Linux — AMD ROCm fallback ─────────────────────────────────────────────
+    try:
+        result = subprocess.run(
+            ["rocm-smi", "--showmeminfo", "vram", "--json"],
+            capture_output=True, text=True, check=True
+        )
+        import json
+        data = json.loads(result.stdout)
+        # rocm-smi returns bytes
+        vram_mb = int(list(data.values())[0]["VRAM Total Memory (B)"]) / 1024 / 1024
+        return _options_from_vram(vram_mb)
+    except Exception:
+        pass
+
+    # ── CPU fallback ──────────────────────────────────────────────────────────
+    return {"num_gpu": 0, "num_ctx": 2048}
 
 settings.gpu_options = get_model_gpu_options()
 print(f"GPU Options: {settings.gpu_options}")
